@@ -1,11 +1,25 @@
 {
   "name": "access-coin",
   "version": "1.0.0",
-  "description": "Access Coin smart contract architecture",
-  "main": "index.js",
+  "description": "",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Ori Shimony",
-  "license": "ISC"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ACXNetwork/access-coin.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ACXNetwork/access-coin/issues"
+  },
+  "homepage": "https://github.com/ACXNetwork/access-coin#readme",
+  "dependencies": {
+    "zeppelin-solidity": "1.6.0"
+  }
 }
