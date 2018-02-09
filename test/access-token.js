@@ -309,6 +309,12 @@ contract('AccessToken' , (accounts) => {
 		assert.equal(token , tokenInstance.address , 'token address does not match');		
 	});
 
+	it('sale : should call eth to usd method' , async () => {
+		await saleInstance.setEthToUsd(2000 , {from: owner});
+		var ethToUsd = await saleInstance.ethToUsd.call();
+		assert.equal(ethToUsd.toNumber() , 2000 , 'decimals does not match');		
+	});
+
 	it('sale : should allow owner to buy token' , async () => {
 		var account = owner;
 

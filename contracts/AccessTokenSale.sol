@@ -116,6 +116,20 @@ contract AccessTokenSale is Ownable, Timestamped {
 	}
 
 	/**
+	 * @dev Function that set eth to usd price
+	 *
+	 * @param _ethToUsd eth to usd price
+	 */
+	function setEthToUsd(uint256 _ethToUsd) onlyOwner public {
+		// ether to usd price
+		ethToUsd = _ethToUsd;
+		
+		phase1Rate = 0.020 ether / ethToUsd;	
+		phase2Rate = 0.025 ether / ethToUsd;	
+		phase3Rate = 0.025 ether / ethToUsd;	
+	}
+
+	/**
 	 * @dev Function that set whitelist addresses
 	 *
 	 * @param _address address to manage
@@ -509,6 +523,7 @@ contract AccessTokenSale is Ownable, Timestamped {
  		require(phase3EndAt < getBlockTime());
  		require(isSoftcapReached());
  		require(!isHardcapReached());
+ 		require(tokenVestingDistributed == true);
  
  		// send remaining funds to exchange
  		var balance = token.balanceOf(this);

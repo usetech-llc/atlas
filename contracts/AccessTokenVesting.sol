@@ -54,6 +54,8 @@ contract AccessTokenVesting is Ownable , Timestamped {
 	bool public revocable;
 	bool public distributed;
 
+	uint256 public claimable = 25;
+
 	mapping (address => uint256) public released;
 	mapping (address => uint256) public refunds;
 	mapping (address => bool) public revoked;
@@ -128,13 +130,13 @@ contract AccessTokenVesting is Ownable , Timestamped {
 		beneficiaries[exchangeWallets[0]] = beneficiaries[exchangeWallets[0]].sub(amount); 
 
 		for(i = 0 ; i < teamWallets.length; i ++) {
-			amount = beneficiaries[teamWallets[i]].mul(25).div(100);
+			amount = beneficiaries[teamWallets[i]].mul(claimable).div(100);
 			token.transfer(teamWallets[i] , amount);
 			beneficiaries[teamWallets[i]] = beneficiaries[teamWallets[i]].sub(amount); 
 		}
 
 		for(i = 0 ; i < advisorWallets.length; i ++) {
-			amount = beneficiaries[advisorWallets[i]].mul(25).div(100);
+			amount = beneficiaries[advisorWallets[i]].mul(claimable).div(100);
 			token.transfer(advisorWallets[i] , amount);
 			beneficiaries[advisorWallets[i]] = beneficiaries[advisorWallets[i]].sub(amount); 
 		}

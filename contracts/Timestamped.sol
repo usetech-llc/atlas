@@ -14,7 +14,7 @@ contract Timestamped is Ownable {
 		ts = _ts;
 	}
 
-	function setPlusTime(uint256 _plus) public {
+	function setPlusTime(uint256 _plus) public onlyOwner {
 		plus = _plus;
 	}
 
