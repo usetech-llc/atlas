@@ -2,16 +2,20 @@
 const ethereumAsserts = {};
 
 ethereumAsserts.expectRevertAsync = async function(testedFunction, message) {
+
+    /**
+     *   vpredtechenskaya 22.02.2018  implementation was changed
+     */
+    const txRevertRegExp = /VM Exception while processing transaction: revert|not a number/; // TODO parametrize function
+
+    let f = () => {};
     try {
         await testedFunction();
-    } catch (error) {
-        const invalidOptcode = error.message.search('not a number') >= 0;
-        const revert = error.message.search('VM Exception while processing transaction: revert') >= 0;
-        assert(invalidOptcode || revert, 'Expected throw, got <' + error + '> instead');
-        return;
+    } catch(e) {
+        f = () => {throw e};
+    } finally {
+        assert.throws(f, txRevertRegExp);
     }
-
-    assert.fail(message);
 };
 
 module.exports = ethereumAsserts;

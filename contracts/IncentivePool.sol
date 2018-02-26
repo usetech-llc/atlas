@@ -49,7 +49,7 @@ contract IncentivePool {
 	//   3. Inflation for last value in inflation_timestamp <= timestamp is last value in inflation_rate
 	uint256[] public inflation_rate;
 	uint256[] public inflation_timestamp; // Inflation period beginning timestamps
-	uint256 public constant inflation_peiod = seconds_in_one_year;
+	uint256 public constant inflation_period = seconds_in_one_year;
 	uint256 public last_inflation_update;
 	uint256 public inflation_support;
 	mapping (address => bool) public inflation_votes;
@@ -293,8 +293,8 @@ contract IncentivePool {
 	*/
 	function updateInflation() external onlyController {
 		uint256 currentTime = now;
-		require(currentTime > last_inflation_update + inflation_peiod);
-		require(currentTime >= deterministic_minting_period);
+		require(currentTime > last_inflation_update + inflation_period);
+		require(currentTime >= genesis + deterministic_minting_period);
 
 		inflation_timestamp.push(currentTime);
 

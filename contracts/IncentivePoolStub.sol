@@ -11,7 +11,7 @@ contract IncentivePoolStub is IncentivePool {
 		return getCurveValue(_timestamp);
 	}
 
-	function getMintedAmountForTimestampTestable(uint256 timeStamp) internal constant returns (uint256 mintedTokenAmount) {
+	function getMintedAmountForTimestampTestable(uint256 timeStamp) public constant returns (uint256 mintedTokenAmount) {
 		return getMintedAmountForTimestamp(timeStamp);
 	}
 
