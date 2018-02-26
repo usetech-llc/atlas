@@ -1,113 +1,308 @@
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.18;
 
-contract Governance {
+import "zeppelin-solidity/contracts/math/SafeMath.sol";
+import "zeppelin-solidity/contracts/ownership/Ownable.sol";
+import "./Timestamped.sol";
+import "./AccessToken.sol";
 
-	/*** FIELDS ***/
-	mapping (address => uint) public avaliable_votes; 	// maps addresses to balance - votes_cast;
+contract Governance is Ownable, Timestamped {
+	using SafeMath for uint256;
 
-	address[] public amendments; // submitted amendments
-	mapping (address => mapping(uint => uint)) public amendment_support; // voter support for each amendment
+	// token
+	AccessToken public token;
 
-	address public finalist; // address of finalist
-	uint public finalist_support; // voting weight of finalist
+	// reference addresses
+	address public tokenAddress;
+
+	// array of candidate addresses
+	address[] public candidates;
+
+	// number of candidate addresses
+	uint256 public candidateCount = 0;
+
+	// map to keep candidate list unique
+	mapping (address => bool) public candidateList;
+
+	// votes given to candidate 
+	mapping (address => uint256) public candidateVotes;
+
+	// weight given to candidate 
+	mapping (address => uint256) public candidateWeight;
+
+	// array of voter addresses
+	address[] public voters;
+
+	// number of voter addresses
+	uint256 public voterCount = 0;
+
+	// mapping to track who voted whom
+	mapping (address => address) public voterList;
+
+	// votes given to candidate 
+	mapping (address => mapping (address => uint256)) public candidateVoters;
+
+	// finalist variables
+	address public finalist;
+	uint256 public finalistVotes;
+	uint256 public finalistWeight;
+
+	// array of supporter addresses
+	address[] public supporters;
+
+	// number of supporter addresses
+	uint256 public supporterCount = 0;
+
+	// finalist supporters
+	mapping (address => uint256) public finalistSupporters;
+	uint256 public finalistSupport;
+
+	// decided contract variables 
+	address public decided;
+	uint256 public decidedVotes;
+	uint256 public decidedWeight;	
+	uint256 public decidedSupport;
+
 	
-	uint public cycle_counter;
-	uint public constant quorum = 50; // 50% quorum
+	// quorum percentage
+	uint public constant quorum = 50;
 
-	/*
-	bool public inflation_bool = true;
-	*/
+	// tokens in circulation, main unit
+	uint public constant tokensInCirculation = 4000;
 
-	/*** FUNCTIONS ***/
-	// constructor
-	function Governance() {
-		finalist = 0;
-		finalist_support = 0;
-		cycle_counter = 2; 	// initializing to 2 forces 1 DM cycle before our first G cycle
+	// parameter to determine cycle counter
+	uint256 public cycleCounter = 2;
+
+	/**
+	 * @dev returns the stage of election
+	 *
+	 * @param _tokenAddress address of access token	 
+	 */
+	function Governance(address _tokenAddress) public {
+		token = AccessToken(_tokenAddress);
 	}
 
-	function computeElectionStage() public constant returns (uint) {
-		// every block is apprx 15 seconds
-		// apprx 31,557,600 seconds in a year -> 2,103,840 blocks
-		// -> 2,000,000
-		// 1,000,000 in 6 months
-		uint mod = block.number%1000000;
-		if (mod < 500000){
-			if (mod < 166667){
+	/**
+	 * @dev returns the stage of election
+	 * every block is apprx 15 seconds
+	 * 1 year  = 2,103,840 blocks, approx 2,000,000 block
+	 * 6 months = 1,000,000
+	 */
+	function stage() public view returns (uint256) {
+		uint mod = getBlockNumber() % 1000000;
+		if (mod < 500000) {
+			if (mod < 166667) {
 				return 1;			// stage 1 (submit)
-			}
-			else if (mod < 333333){
+			} else if (mod < 333333) {
 				return 2;			// stage 2 (choose)
-			}
-			else {
+			} else  {
 				return 3;			// stage 3 (decide)
 			}
-		}
-		else {
+		} else {
 			return 0;				// non-election
 		}
 	}
 
-	function submit(address submission) public {
-		require(computeElectionStage() == 1); // in stage 1 (submit)?
-		//amendments.push(submission);
-	}
-
-	function choose(address choice) public {
-		require(computeElectionStage() == 2); // in stage 2 (choose)?
-		//remove vote weight = 0;
-		// transfer method in token contract should call this for the sender
-		// add voting weight (sender's balance) to the address chosen
-		//remove vote weight
-
-		// CALCULATE MY VOTING WEIGHT & prevent double voting 
-
-		uint weight = 1; // PLACEHOLDER
-		amendment_support[cycle_counter][choice] += weight; // add voting weight
-		if (amendment_support[cycle_counter][choice] > amendment_support[cycle_counter][finalist]) {
-			finalist = choice; // update address with most votes
+	/**
+	 * @dev returns the cycle of election
+	 *
+	 */
+	function cycle() public view returns (uint256) {
+		if ((cycleCounter) % 3 == 0) {
+			return 0; // governance contract
 		}
+		else {
+			return 1; // decision module
+		}	
 	}
 
-	// called by voters to support finalist (those against just abstain)
-	function decide() public {
-		require(computeElectionStage() == 3); // in decision stage?
+	/**
+	 * @dev adds governance contract address to list of candidates
+	 *
+	 * @param candidate address of the deployed contract that sender is submitting
+	 *
+	 */
+	function submit(address candidate) public returns (bool) {
+		// check if submission stage is running
+		require(stage() == 1);
+		// check if candidate is not submitted before
+		require(candidateList[candidate] == false);
 
-		// CALCULATE MY VOTING WEIGHT & prevent double voting
-
-	 	// add voting weight to finalist_support
-	 	uint weight = 1; // PLACEHOLDER
-	 	finalist_support += weight;
-	}
-
-	// determine if the finalist amendment reached quorum
-	function closeElection() public {
-		require(computeElectionStage() == 0); // is election over?
-		require(finalist != 0); // check that closeElection has not been called
-		bool quorum_reached = false;
-	
-		uint circulating_tokens = 6000000; // PLACEHOLDER
-		if (finalist_support*100/circulating_tokens > quorum){
-			address temp  = finalist; // save finalist address in local variable
-			quorum_reached = true;
+		// add candidate to list 
+		if(candidateCount == candidates.length) {
+			candidates.length += 1;
 		}
+		candidates[candidateCount ++] = candidate;
 
-		// RESET PARAMETERS
-		finalist = 0; 
-		finalist_support = 0;
-
-		cycle_counter += 1; // incremenet cycle_counter
+		// set candidate to valid one
+		candidateList[candidate] = true;
 		
-		if (quorum_reached){
-			if ((cycle_counter-1)%3 == 0) {
-				// external call to switch governance contract
-				//
+		return true;
+	}
+
+	/**
+	 * @dev adds vote to governance contract address 
+	 *
+	 * @param candidate address of the deployed contract that sender is voting
+	 *
+	 */
+	function choose(address candidate) public returns (bool) {
+		// check if voting stage is running
+		require(stage() == 2);
+		// check if candidate is valid one
+		require(candidateList[candidate]);
+		// check if user have not already voted
+		require(candidateVoters[candidate][msg.sender] == 0);
+		// check if user have not already voted to someone else
+		require(voterList[msg.sender] == address(0));
+
+		// get balance of token and check if user has enough balance
+		uint256 balance = token.balanceOf(msg.sender);
+		require(balance > 0);
+
+		// add vote to candidate
+		candidateVotes[candidate] = candidateVotes[candidate].add(1);
+
+		// add weight to candidate
+		candidateWeight[candidate] = candidateWeight[candidate].add(balance);
+
+		// register voter for candidate
+		candidateVoters[candidate][msg.sender] = candidateVoters[candidate][msg.sender].add(balance);
+
+		// add voter to list 
+		if(voterCount == voters.length) {
+			voters.length += 1;
+		}
+		voters[voterCount ++] = msg.sender;
+
+		// register voter 
+		voterList[msg.sender] = candidate;
+
+		// check the finalist
+		if(finalistWeight < candidateWeight[candidate]) {
+			finalist = candidate;
+			finalistWeight = candidateWeight[candidate];
+			finalistVotes = candidateVotes[candidate];
+		}
+
+		return true;
+	}
+
+	/**
+	 * @dev adds decision to hightest voted governance contract address 
+	 *
+	 */
+	function decide() public returns (bool) {
+		// check if deciding stage is running 
+		require(stage() == 3);
+		// check if user has not already decided 
+		require(finalistSupporters[msg.sender] == 0);
+
+		// get balance of token and check if user has enough balance
+		uint256 balance = token.balanceOf(msg.sender);
+		require(balance > 0);
+
+		// add support to finalist
+		finalistSupport = finalistSupport.add(balance);
+
+		// register supporter for finalist
+		finalistSupporters[msg.sender] = finalistSupporters[msg.sender].add(balance);
+
+		// add voter to list 
+		if(supporterCount == supporters.length) {
+			supporters.length += 1;
+		}
+		supporters[supporterCount ++] = msg.sender;
+		
+		return true;
+	}
+
+	/**
+	 * @dev checks if quorum reached
+	 *
+	 */
+	function isQuorumReached() public view returns (bool) {
+		// check if quorum reached
+		bool quorumReached = false;
+		if(finalistSupport.mul(100).div(tokensInCirculation.mul(1E18)) >= quorum) {
+			quorumReached = true;
+		}
+		return quorumReached;
+	}
+
+	/**
+	 * @dev close the election and update growth contract
+	 *
+	 */
+	function close() public returns (bool) {
+		// check if close stage is reached 
+		require(stage() == 0);
+		// check if finalist is selected
+		require(finalist != address(0));
+
+		// check if quorum reached
+		if(isQuorumReached()) {
+			if (cycle() == 0) {
+				// switch governance contract
 			}
 			else {
-				// external call to switch DM contract
-			}
+				// switch decision module contract
+			}			
 		}
-		
+
+		// increment cycle counter
+		cycleCounter = cycleCounter + 1;
+
+		// reset finalist and previous variables
+		reset();
+
+		return true;
 	}
 
+	function reset() internal returns (bool) {
+		// update variables to prevent duplicate calls
+		decided = finalist;
+		decidedVotes = finalistVotes;
+		decidedWeight = finalistWeight;
+		decidedSupport = finalistSupport;
+
+		finalist = address(0);
+		finalistVotes = 0;
+		finalistWeight = 0;
+		finalistSupport = 0;
+
+		uint256 i = 0;
+		uint256 j = 0;
+
+		// reset candidate voters 
+		for(i = 0 ; i < candidateCount ; i ++) {
+			for(j = 0 ; j < voterCount ; j ++) {
+				candidateVoters[candidates[i]][voters[j]] = 0;
+			}
+		}
+
+		// reset candidate mapping 
+		for(i = 0 ; i < candidateCount ; i ++) {
+			candidateList[candidates[i]] = false;
+			candidateVotes[candidates[i]] = 0;
+			candidateWeight[candidates[i]] = 0;
+			candidates[i] = address(0);
+		}
+		candidateCount = 0;
+
+		// reset voter mapping 
+		for(i = 0 ; i < voterCount ; i ++) {
+			voterList[voters[i]] = address(0);
+			voters[i] = address(0);
+		}
+		voterCount = 0;
+
+		// reset finalist supporters 
+		for(i = 0 ; i < supporterCount ; i ++) {
+			finalistSupporters[supporters[i]] = 0;
+			supporters[i] = address(0);
+		}
+		supporterCount = 0;
+
+		return true;
+	}
 }

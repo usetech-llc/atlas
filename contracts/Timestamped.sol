@@ -9,6 +9,7 @@ import "zeppelin-solidity/contracts/ownership/Ownable.sol";
 contract Timestamped is Ownable {
 	uint256 public ts = 0;
 	uint256 public plus = 0;
+	uint256 public bn = 0;
 
 	function setBlockTime(uint256 _ts) public onlyOwner {
 		ts = _ts;
@@ -23,6 +24,18 @@ contract Timestamped is Ownable {
 			return ts + plus;
 		} else {
 			return block.timestamp + plus; 
+		}
+	}
+
+	function setBlockNumber(uint256 _bn) public onlyOwner {
+		bn = _bn;
+	}
+
+	function getBlockNumber() public view returns (uint256) {
+		if(bn > 0) {
+			return bn;
+		} else {
+			return block.number; 
 		}
 	}
 }

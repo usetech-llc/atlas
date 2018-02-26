@@ -5,7 +5,7 @@
 <br>
 
 <p align="center">
-  <img width="397" height="490" src="resources/images/access-logo.png">
+  <img src="logo.jpg">
 </p>
 
 ### Technical Definition
@@ -13,8 +13,7 @@ ACX is a ERC20-compliant token derived from the OpenZeppelin MintableToken
 
 ## Contracts
 **coin**:
-  * [AccessCoin.sol](/contracts/AccessCoin.sol): Core coin logic extending ERC20 functionality
-  * [MintableToken.sol](https://github.com/OpenZeppelin/zeppelin-solidity/blob/master/contracts/token/MintableToken.sol): Our slightly modified version of OpenZeppelin's MintableToken
+  * [AccessToken.sol](/contracts/AccessToken.sol): Core coin logic implementing MintableToken functionality
 
 **network**:
   * [Relay.sol](/contracts/Relay.sol): Our slightly modified version of Consensys call forwarding contract for on-chain upgrades
@@ -22,9 +21,9 @@ ACX is a ERC20-compliant token derived from the OpenZeppelin MintableToken
   * [IncentivePool.sol](/contracts/IncentivePool.sol): Logic for dynamic generation and distribution of coins
   
 **crowdsale**:
-  * [AccessCoinCrowdsale.sol](): Implementation of our token sale
+  * [AccessTokenSale.sol](/contracts/AccessTokenSale.sol): Implementation of our token sale
+  * [AccessTokenVesting.sol](/contracts/AccessTokenVesting.sol): Our slightly modified version of OpenZeppelin's TokenVesting
   * [MultisigWallet.sol](): Consensys multisig wallet used for ACX Network funds and Atlas Underserved Exchange
-  * [TokenVesting.sol](): Our slightly modified version of OpenZeppelin's TokenVesting
 
 ## Technology
 | software      | version       | purpose  |
@@ -67,10 +66,10 @@ truffle test
 besides this readme, in depth documentation and introduction can be found in our [wiki](https://github.com/ACXNetwork/access-coin/wiki)
 
 ## Support and Community
-1. [slack](https://acxnetwork.slack.com)
+1. [telegram](https://t.me/ACX_network)
 2. [reddit](https://www.reddit.com/r/ACX_Network/)
-3. [twitter](https://twitter.com/acx_network)
-4. [github](https://github.com/acxnetwork)
+3. [twitter](https://twitter.com/ACX_network)
+4. [github](https://github.com/ACXnetwork)
 5. [web](https://acxnetwork.com)
 
 ## Licensing

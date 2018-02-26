@@ -14,7 +14,7 @@ contract Relay {
 	}
 
 	/*** FUNCTIONS ***/
-	function Relay(address initial_governance) {
+	function Relay(address initial_governance) public {
 		governance = initial_governance;
 		decision_module = 0x0;
 	}

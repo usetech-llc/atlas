@@ -18,9 +18,12 @@ contract AccessTokenSale is Ownable, Timestamped {
 	// starting time of this contract
 	uint256 public startAt = 1517184000;
 
-	// ether to usd price
+	// ether to usd price 
 	uint256 public ethToUsd = 1000;
-	
+
+	// usd to wei price
+	uint256 public usdToWei = 1 ether / ethToUsd;
+
 	// phase 0 variables
 	uint256 public phase0Hardcap = 660000000E18;
 	uint256 public phase0TokenSold = 0;
@@ -28,7 +31,7 @@ contract AccessTokenSale is Ownable, Timestamped {
 
 	// phase 1 variables
 	uint256 public phase1Hardcap = phase0Hardcap + 540000000E18;
-	uint256 public phase1Rate = 0.020 ether / ethToUsd;	
+	uint256 public phase1Rate = 20 * usdToWei / 1000;	
 	uint256 public phase1TokenSold = 0;
 	uint256 public phase1EtherRaised = 0;
 	uint256 public phase1StartAt = startAt;	
@@ -36,7 +39,7 @@ contract AccessTokenSale is Ownable, Timestamped {
 
 	// phase 2 variables
 	uint256 public phase2Hardcap = phase1Hardcap + 420000000E18;
-	uint256 public phase2Rate = 0.025 ether / ethToUsd;	
+	uint256 public phase2Rate = 25 * usdToWei / 1000;	
 	uint256 public phase2TokenSold = 0;
 	uint256 public phase2EtherRaised = 0;
 	uint256 public phase2StartAt = phase1EndAt + 1;	
@@ -44,7 +47,7 @@ contract AccessTokenSale is Ownable, Timestamped {
 
 	// phase 3 variables
 	uint256 public phase3Hardcap = phase2Hardcap;
-	uint256 public phase3Rate = 0.025 ether / ethToUsd;	
+	uint256 public phase3Rate = 25 * usdToWei / 1000;	
 	uint256 public phase3TokenSold = 0;
 	uint256 public phase3EtherRaised = 0;
 	uint256 public phase3StartAt = phase2EndAt + 1;	
@@ -123,10 +126,13 @@ contract AccessTokenSale is Ownable, Timestamped {
 	function setEthToUsd(uint256 _ethToUsd) onlyOwner public {
 		// ether to usd price
 		ethToUsd = _ethToUsd;
-		
-		phase1Rate = 0.020 ether / ethToUsd;	
-		phase2Rate = 0.025 ether / ethToUsd;	
-		phase3Rate = 0.025 ether / ethToUsd;	
+
+		// usd to wei factor
+		usdToWei = 1 ether / ethToUsd;
+
+		phase1Rate = 20 * usdToWei / 1000;	
+		phase2Rate = 25 * usdToWei / 1000;	
+		phase3Rate = 25 * usdToWei / 1000;	
 	}
 
 	/**
