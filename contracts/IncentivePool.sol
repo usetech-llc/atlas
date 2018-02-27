@@ -52,7 +52,7 @@ contract IncentivePool {
 	uint256 public constant inflation_period = seconds_in_one_year;
 	uint256 public last_inflation_update;
 	uint256 public inflation_support;
-	mapping (address => bool) public inflation_votes;
+	mapping (address => uint256) public inflation_votes;	// Balances of voted wallets (at the time of voting)
 
 	/*** MODIFIERS ***/
 
@@ -259,15 +259,15 @@ contract IncentivePool {
 	*/
 	function inflationSwitch() public {
 		// flip the inflation vote of the sender's tokens
-		bool support = inflation_votes[msg.sender];
-		uint256 balance = token.balanceOf(msg.sender);
-		if (support) {
-			inflation_votes[msg.sender] = false;
-			inflation_support = inflation_support.sub(balance);
+        uint256 voted_balance = inflation_votes[msg.sender];
+		if (voted_balance > 0) {
+			inflation_votes[msg.sender] = 0;
+            inflation_support = inflation_support.sub(voted_balance);
 		}
 		else {
-			inflation_votes[msg.sender] = true;
-			inflation_support = inflation_support.add(balance);
+            uint256 current_balance = token.balanceOf(msg.sender);
+			inflation_votes[msg.sender] = current_balance;
+			inflation_support = inflation_support.add(current_balance);
 		}
 	}
 
@@ -278,11 +278,10 @@ contract IncentivePool {
 	* @param _addr - address to reset the vote for
 	*/
 	function resetInflationVote(address _addr) external onlyController {
-		bool support = inflation_votes[_addr];
-		if (support) {
-			uint256 balance = token.balanceOf(_addr);
-			inflation_votes[_addr] = false;
-			inflation_support = inflation_support.sub(balance);
+        uint256 voted_balance = inflation_votes[_addr];
+		if (voted_balance > 0) {
+			inflation_votes[_addr] = 0;
+			inflation_support = inflation_support.sub(voted_balance);
 		}
 	}
 
