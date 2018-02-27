@@ -103,6 +103,10 @@ contract('IncentivePool', function (accounts) {
         genesis = web3.toBigNumber(await sut.genesis());
         var tokenDecimals = web3.toBigNumber(await token.decimals());
         tokenMultiplier = new BigNumber(Math.pow(10, tokenDecimals));
+
+        // Configure token to work with Incentive Pool
+        await token.setMinter(sut.address);
+        await token.setIncentivePool(sut.address);
     }
 
     before(async function () {
@@ -454,7 +458,22 @@ contract('IncentivePool', function (accounts) {
             (await sut.inflation_votes(recipient1)).should.be.false;
         })
 
-        it('controller resets vote', async() => {
+        it('Token transfer resets vote (transfer)', async() => {
+            await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
+            var amount = tokenMultiplier.mul(70);
+            await allocateAndClaim(amount, recipient1);
+            await sut.inflationSwitch({from: recipient1});
+
+            await token.transfer(recipient2, amount, {from: recipient1});
+
+            (await sut.inflation_support()).should.be.bignumber.equal(new BigNumber(0));
+            (await sut.inflation_votes(recipient1)).should.be.false;
+        })
+
+        it('Token transfer resets vote (transferFrom)', async() => {
+
+            throw new Error("Not implemented");
+
             await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
             var amount = tokenMultiplier.mul(70);
             await allocateAndClaim(amount, recipient1);

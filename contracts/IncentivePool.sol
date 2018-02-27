@@ -2,9 +2,10 @@ pragma solidity ^0.4.16;
 import "./IncentiveCurveTable.sol";
 import "./Relay.sol";
 import "./AccessToken.sol";
+import "./IncentivePoolInterface.sol";
 import "zeppelin-solidity/contracts/math/SafeMath.sol";
 
-contract IncentivePool {
+contract IncentivePool is IncentivePoolInterface {
 	using SafeMath for uint256;
 
 	/*** FIELDS ***/
@@ -285,7 +286,10 @@ contract IncentivePool {
 	*
 	* @param _addr - address to reset the vote for
 	*/
-	function resetInflationVote(address _addr) external onlyController {
+	function resetInflationVote(address _addr) external {
+		// Only token contract can call this method
+		require(msg.sender == address(token));
+
 		bool support = inflation_votes[_addr];
 		if (support) {
 			uint256 balance = token.balanceOf(_addr);
