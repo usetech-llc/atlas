@@ -422,17 +422,17 @@ contract('IncentivePool', function (accounts) {
         })
     })
 
-    describe('Voting cases', async() => {
+    describe('Inflation voting', async() => {
         beforeEach(async function () {
             await deployContracts();
         });
 
-        it('inflation_support and inflation_votes not set by default', async() => {
+        it('inflation_support and inflation_votes are initialized to 0/false', async() => {
             (await sut.inflation_support()).should.be.bignumber.equal(new BigNumber(0));
             (await sut.inflation_votes(recipient1)).should.be.false;
         })
 
-        it('user votes', async() => {
+        it('user votes for inflation', async() => {
             await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
             var amount = tokenMultiplier.mul(70);
             await allocateAndClaim(amount, recipient1);
@@ -442,7 +442,7 @@ contract('IncentivePool', function (accounts) {
             (await sut.inflation_votes(recipient1)).should.be.true;
         })
 
-        it('user resets vote', async() => {
+        it('user flips vote against inflation', async() => {
             await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
             var amount = tokenMultiplier.mul(70);
             await allocateAndClaim(amount, recipient1);
@@ -471,7 +471,7 @@ contract('IncentivePool', function (accounts) {
             })
         })
 
-        it('several users votes', async() => {
+        it('several users vote', async() => {
             await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
             var amount1 = tokenMultiplier.mul(10);
             var amount2 = tokenMultiplier.mul(20);
@@ -556,7 +556,7 @@ contract('IncentivePool', function (accounts) {
         })
     })
 
-    describe.only('ACX Inflation', async() => {
+    describe('ACX Inflation', async() => {
 
         let baseAcxAmount;
 
