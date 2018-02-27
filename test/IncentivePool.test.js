@@ -82,6 +82,7 @@ contract('IncentivePool', function (accounts) {
     let tokenMultiplier;
     let ethCap = web3.toWei(6000, 'ether');
 
+    const secondsInOneYear = 31557600;
 
     /**
      *  Send funds to user (by allocate + claim)
@@ -432,9 +433,9 @@ contract('IncentivePool', function (accounts) {
             await deployContracts();
         });
 
-        it('inflation_support and inflation_votes are initialized to 0/false', async() => {
+        it('inflation_support and inflation_votes are initialized to 0', async() => {
             (await sut.inflation_support()).should.be.bignumber.equal(new BigNumber(0));
-            (await sut.inflation_votes(recipient1)).should.be.false;
+            (await sut.inflation_votes(recipient1)).should.be.bignumber.equal(new BigNumber(0));
         })
 
         it('user votes for inflation', async() => {
@@ -444,7 +445,7 @@ contract('IncentivePool', function (accounts) {
             await sut.inflationSwitch({from: recipient1});
 
             (await sut.inflation_support()).should.be.bignumber.equal(amount);
-            (await sut.inflation_votes(recipient1)).should.be.true;
+            (await sut.inflation_votes(recipient1)).should.be.bignumber.equal(amount);
         })
 
         it('user flips vote against inflation', async() => {
@@ -455,7 +456,7 @@ contract('IncentivePool', function (accounts) {
             await sut.inflationSwitch({from: recipient1});
 
             (await sut.inflation_support()).should.be.bignumber.equal(new BigNumber(0));
-            (await sut.inflation_votes(recipient1)).should.be.false;
+            (await sut.inflation_votes(recipient1)).should.be.bignumber.equal(new BigNumber(0));
         })
 
         it('Token transfer resets vote (transfer)', async() => {
@@ -465,23 +466,24 @@ contract('IncentivePool', function (accounts) {
             await sut.inflationSwitch({from: recipient1});
 
             await token.transfer(recipient2, amount, {from: recipient1});
+            var voteAfter = web3.toBigNumber(await sut.inflation_votes(recipient1));
 
             (await sut.inflation_support()).should.be.bignumber.equal(new BigNumber(0));
-            (await sut.inflation_votes(recipient1)).should.be.false;
+            voteAfter.should.be.bignumber.equal(0);
         })
 
         it('Token transfer resets vote (transferFrom)', async() => {
-
-            throw new Error("Not implemented");
-
             await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
             var amount = tokenMultiplier.mul(70);
             await allocateAndClaim(amount, recipient1);
             await sut.inflationSwitch({from: recipient1});
-            await sut.resetInflationVote(recipient1, {from: decisionModuleAddr});
+
+            await token.approve(accounts[0], amount, {from: recipient1});
+            await token.transferFrom(recipient1, recipient2, amount, {from: accounts[0]});
+            var voteAfter = web3.toBigNumber(await sut.inflation_votes(recipient1));
 
             (await sut.inflation_support()).should.be.bignumber.equal(new BigNumber(0));
-            (await sut.inflation_votes(recipient1)).should.be.false;
+            voteAfter.should.be.bignumber.equal(0);
         })
 
         it('only controller can reset vote', async() => {
@@ -501,8 +503,8 @@ contract('IncentivePool', function (accounts) {
             await sut.inflationSwitch({from: recipient2});
 
             (await sut.inflation_support()).should.be.bignumber.equal(amount1.plus(amount2));
-            (await sut.inflation_votes(recipient1)).should.be.true;
-            (await sut.inflation_votes(recipient2)).should.be.true;
+            (await sut.inflation_votes(recipient1)).should.be.bignumber.equal(amount1);
+            (await sut.inflation_votes(recipient2)).should.be.bignumber.equal(amount2);
         })
     })
 
@@ -542,30 +544,37 @@ contract('IncentivePool', function (accounts) {
             var amount = tokenMultiplier.mul(70);
             await allocateAndClaim(amount, recipient1);
             await sut.inflationSwitch({from: recipient1});
-            const txInfo = await sut.updateInflation({from: decisionModuleAddr});
+
+            var iTime = await timeHelper.executeAndGetTimestamp(async() => {
+                return await sut.updateInflation({from: decisionModuleAddr});
+            });
 
             (await sut.getCurrentInflation()).should.be.bignumber.equal(amount.dividedBy(100));
             (await sut.inflation_rate(0)).should.be.bignumber.equal(amount.dividedBy(100));
 
-            const iTime = web3.eth.getBlock(txInfo.receipt.blockNumber).timestamp;
             (await sut.inflation_timestamp(0)).should.be.bignumber.equal(iTime);
             (await sut.last_inflation_update()).should.be.bignumber.equal(iTime);
         })
 
         it('update inflation after 10 and 11 years: values are correct', async() => {
+
+            // 10 years+ after genesis: recipient1 votes for inflation
             await timeHelper.setTestRPCTime(genesis.add(10 * 365.25 * 24 * 3600));
             var amount1 = tokenMultiplier.mul(10);
             await allocateAndClaim(amount1, recipient1);
             await sut.inflationSwitch({from: recipient1});
-            var txInfo = await sut.updateInflation({from: decisionModuleAddr});
-            const iTime1 = web3.eth.getBlock(txInfo.receipt.blockNumber).timestamp;
+            const iTime1 = await timeHelper.executeAndGetTimestamp(async() => {
+                return await sut.updateInflation({from: decisionModuleAddr});
+            });
 
+            // 11 years+ after genesis: recipient2 votes for inflation
             await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600 + 10));
             var amount2 = tokenMultiplier.mul(20);
             await allocateAndClaim(amount2, recipient2);
             await sut.inflationSwitch({from: recipient2});
-            txInfo = await sut.updateInflation({from: decisionModuleAddr});
-            const iTime2 = web3.eth.getBlock(txInfo.receipt.blockNumber).timestamp;
+            const iTime2 = await timeHelper.executeAndGetTimestamp(async() => {
+                return await sut.updateInflation({from: decisionModuleAddr});
+            });
 
             (await sut.getCurrentInflation()).should.be.bignumber.equal(amount1.plus(amount2).dividedBy(100));
             (await sut.inflation_rate(0)).should.be.bignumber.equal(amount1.dividedBy(100));
@@ -582,13 +591,7 @@ contract('IncentivePool', function (accounts) {
 
         beforeEach(async function () {
             await deployContracts();
-
-            // Adjust time to 10 years after deployment
-            await timeHelper.setTestRPCTime(genesis.add(10 * 365.25 * 24 * 3600));
-
-            // Trigger mint
-            await sut.allocateACX(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
-            baseAcxAmount = web3.toBigNumber(await sut.ACX_minted());
+            baseAcxAmount = new BigNumber(1.62e9).mul(tokenMultiplier);
         });
 
         /* 3 cases:
@@ -598,58 +601,115 @@ contract('IncentivePool', function (accounts) {
          */
 
         it('base amount should be exactly 1.62 billion', async () => {
-            baseAcxAmount.should.be.bignumber.equal(new BigNumber(1.62e9).mul(tokenMultiplier));
+            // Adjust time to 10 years after deployment
+            await timeHelper.setTestRPCTime(genesis.add(10 * 365.25 * 24 * 3600));
+
+            await sut.allocateACX(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
+            web3.toBigNumber(await sut.ACX_minted()).should.be.bignumber.equal(baseAcxAmount);
         });
 
         it('inflation should be zero without calling updateInflation', async () => {
-            // Adjust time to 11 years after deployment
             await timeHelper.setTestRPCTime(genesis.add(10 * 365.25 * 24 * 3600));
-
-            // Minted amount should still be equal baseAcxAmount
+            await sut.allocateACX(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
+            await timeHelper.setTestRPCTime(genesis.add(12 * 365.25 * 24 * 3600));
+            (await sut.ACX_minted()).should.be.bignumber.equal(baseAcxAmount);
+            await timeHelper.setTestRPCTime(genesis.add(15 * 365.25 * 24 * 3600));
+            (await sut.ACX_minted()).should.be.bignumber.equal(baseAcxAmount);
+            await timeHelper.setTestRPCTime(genesis.add(20 * 365.25 * 24 * 3600));
             (await sut.ACX_minted()).should.be.bignumber.equal(baseAcxAmount);
         });
 
         it('minted amount does not change after deterministic period before update inflation', async() => {
             (await sut.getMintedAmountForTimestampTestable(10 * 365.25 * 24 * 3600)).should.be.bignumber.equal(baseAcxAmount);
-            (await sut.getMintedAmountForTimestampTestable(11 * 365.25 * 24 * 3600)).should.be.bignumber.equal(baseAcxAmount);
+            (await sut.getMintedAmountForTimestampTestable(12 * 365.25 * 24 * 3600)).should.be.bignumber.equal(baseAcxAmount);
             (await sut.getMintedAmountForTimestampTestable(15 * 365.25 * 24 * 3600)).should.be.bignumber.equal(baseAcxAmount);
             (await sut.getMintedAmountForTimestampTestable(20 * 365.25 * 24 * 3600)).should.be.bignumber.equal(baseAcxAmount);
         })
 
-        it('update - allocate scenario', async () => {
+        it('minted amount growth is correct with time after inflation update', async() => {
+            await timeHelper.setTestRPCTime(genesis.add(10 * 365.25 * 24 * 3600));
             var amount = tokenMultiplier.mul(1000);
-            allocateAndClaim(amount, recipient1);
+            await allocateAndClaim(amount, recipient1);
             await sut.inflationSwitch({from: recipient1});
+            const iTime = await timeHelper.executeAndGetTimestamp(async() => {
+                return await sut.updateInflation({from: decisionModuleAddr});
+            });
 
-            var after11years = genesis.add(11 * 31557600);
-            await timeHelper.setTestRPCTime(after11years);
+            const inflationRate = amount.dividedBy(100);
+            baseAcxAmount.should.be.bignumber.equal(await sut.getMintedAmountForTimestampTestable(iTime));
+            baseAcxAmount.plus(inflationRate).should.be.bignumber.equal(await sut.getMintedAmountForTimestampTestable(iTime + secondsInOneYear));
+            baseAcxAmount.plus(inflationRate.mul(2)).should.be.bignumber.equal(await sut.getMintedAmountForTimestampTestable(iTime + secondsInOneYear * 2));
+            baseAcxAmount.plus(inflationRate.mul(5)).should.be.bignumber.equal(await sut.getMintedAmountForTimestampTestable(iTime + secondsInOneYear * 5));
+        })
+
+        it('minted amount is correct after several inflation updates', async() => {
+            await timeHelper.setTestRPCTime(genesis.add(10 * secondsInOneYear));
+            var amount1 = tokenMultiplier.mul(10);
+            await allocateAndClaim(amount1, recipient1);
+            await sut.inflationSwitch({from: recipient1});
             await sut.updateInflation({from: decisionModuleAddr});
 
-            // TODO
-            baseAcxAmount.plus(amount.dividedBy(100)).should.be.bignumber.at.least(await sut.getMintedAmountForTimestampTestable(after11years));
+            await timeHelper.setTestRPCTime(genesis.add(11 * secondsInOneYear + 24 * 3600));
+            var amount2 = tokenMultiplier.mul(20);
+            await allocateAndClaim(amount2, recipient2);
+            await sut.inflationSwitch({from: recipient2});
+            const iTime = await timeHelper.executeAndGetTimestamp(async() => {
+                return await sut.updateInflation({from: decisionModuleAddr});
+            });
+
+            const inflationRate1 = amount1.dividedBy(100);
+            const mintedAmount1 = await sut.getMintedAmountForTimestampTestable(iTime);
+            mintedAmount1.should.be.bignumber.at.least(baseAcxAmount.plus(inflationRate1));
+
+            const inflationRate2 = amount1.plus(amount2).dividedBy(100);
+            (await sut.getMintedAmountForTimestampTestable(iTime + secondsInOneYear)).should.be.bignumber.equals(mintedAmount1.plus(inflationRate2));
+            (await sut.getMintedAmountForTimestampTestable(iTime + secondsInOneYear * 2)).should.be.bignumber.equals(mintedAmount1.plus(inflationRate2.mul(2)));
+            (await sut.getMintedAmountForTimestampTestable(iTime + secondsInOneYear * 5)).should.be.bignumber.equals(mintedAmount1.plus(inflationRate2.mul(5)));
+        })
+
+        it('allocation is correct after inflation update', async() => {
+            await timeHelper.setTestRPCTime(genesis.add(10 * 365.25 * 24 * 3600));
+            var amount = tokenMultiplier.mul(1000);
+            await allocateAndClaim(amount, recipient1);
+            await sut.inflationSwitch({from: recipient1});
+            const iTime = await timeHelper.executeAndGetTimestamp(async() => {
+                return await sut.updateInflation({from: decisionModuleAddr});
+            });
+
+            // check minted amount and balance after year
+            await timeHelper.setTestRPCTime(iTime + secondsInOneYear);
             await sut.allocateACX(0, recipient1, {from: decisionModuleAddr});
-            baseAcxAmount.plus(amount.dividedBy(100)).should.be.bignumber.at.least(await sut.ACX_minted());
-        });
+            (await sut.ACX_minted()).should.be.bignumber.at.least(baseAcxAmount.plus(amount.dividedBy(100)));
+            (await sut.ACX_balance()).should.be.bignumber.at.least(baseAcxAmount.minus(amount).plus(amount.dividedBy(100)));
 
-        it('update - allocate - allocate scenario', async () => {
+            // after two years
+            await timeHelper.setTestRPCTime(iTime + secondsInOneYear * 2);
+            await sut.allocateACX(0, recipient1, {from: decisionModuleAddr});
+            (await sut.ACX_minted()).should.be.bignumber.at.least(baseAcxAmount.plus(amount.dividedBy(100).mul(2)));
+            (await sut.ACX_balance()).should.be.bignumber.at.least(baseAcxAmount.minus(amount).plus(amount.dividedBy(100).mul(2)));
+        })
 
+        it('allocation is correct after several inflation updates', async() => {
+            await timeHelper.setTestRPCTime(genesis.add(10 * secondsInOneYear));
+            var amount1 = tokenMultiplier.mul(10);
+            await allocateAndClaim(amount1, recipient1);
+            await sut.inflationSwitch({from: recipient1});
+            await sut.updateInflation({from: decisionModuleAddr});
 
+            await timeHelper.setTestRPCTime(genesis.add(11 * secondsInOneYear + 1000));
+            var amount2 = tokenMultiplier.mul(20);
+            await allocateAndClaim(amount2, recipient2);
+            await sut.inflationSwitch({from: recipient2});
+            const iTime = await timeHelper.executeAndGetTimestamp(async() => {
+                return await sut.updateInflation({from: decisionModuleAddr});
+            });
 
-            throw new Error("Not implemented");
-        });
+            await timeHelper.setTestRPCTime(iTime + secondsInOneYear);
+            await sut.allocateACX(0, recipient1, {from: decisionModuleAddr});
 
-        it('update - update - allocate scenario', async () => {
-
-
-            throw new Error("Not implemented");
-        });
-
-        it('Token transfer resets vote', async () => {
-
-
-            throw new Error("Not implemented");
-        });
-
+            (await sut.ACX_minted()).should.be.bignumber.at.least(baseAcxAmount.plus(amount1.dividedBy(100)).plus(amount2.dividedBy(100)));
+            (await sut.ACX_balance()).should.be.bignumber.at.least(baseAcxAmount.minus(amount1).minus(amount2).plus(amount1.dividedBy(100)).plus(amount2.dividedBy(100)));
+        })
     })
 
 
