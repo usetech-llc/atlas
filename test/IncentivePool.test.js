@@ -486,7 +486,7 @@ contract('IncentivePool', function (accounts) {
             voteAfter.should.be.bignumber.equal(0);
         })
 
-        it('only controller can reset vote', async() => {
+        it('Random address cannot reset vote', async() => {
             await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
             expectRevertAsync(async() => {
                 await sut.resetInflationVote(recipient1, {from: recipient1});
