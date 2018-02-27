@@ -86,6 +86,14 @@ contract IncentivePool {
 		deterministicCap = deterministicCap.mul(10 ** decimals);
 	}
 
+	/**
+    *  Default method
+    *
+    *  Receive all ETH that is sent to this contract from any address
+    */
+    function () external payable {
+    }
+
 	// Following the "Withdrawal from Contracts" pattern (https://solidity.readthedocs.io/en/latest/common-patterns.html#withdrawal-from-contracts)
 	function allocateACX(uint payout, address recipient) external onlyController {
 		mintACX();

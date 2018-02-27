@@ -80,6 +80,7 @@ contract('IncentivePool', function (accounts) {
     let recipient1 = accounts[3];
     let recipient2 = accounts[4];
     let tokenMultiplier;
+    let ethCap = web3.toWei(6000, 'ether');
 
 
     /**
@@ -657,11 +658,146 @@ contract('IncentivePool', function (accounts) {
         });
     })
 
-    describe('Unlock ETH', async() => {
-        it('', async () => {
-            throw new Error("Not implemented");
+    describe('Operations with ETH', async() => {
+
+        describe('ETH can be received by IncentivePool', async() => {
+            beforeEach(async function () {
+                await deployContracts();
+
+            });
+
+            it('Send ETH to contract', async () => {
+                // Transfer 6000 ETH to contract
+                await sut.sendTransaction({from: accounts[0], to: sut.address, value: ethCap});
+            });
         });
+
+        describe('allocateETH method security', async() => {
+            before(async function () {
+                await deployContracts();
+            });
+
+            it('Should be callable by Decision Module', async () => {
+                await sut.allocateETH(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
+            });
+
+            it('Should be callable by Governance', async () => {
+                await sut.allocateETH(0, recipient1, {from: governanceAddr}).should.be.fulfilled;
+            });
+
+            it('Should not be callable from non-controller address', async () => {
+                await sut.allocateETH(0, recipient1, {from: recipient1}).should.be.rejected;
+            });
+        });
+
+        describe('Unlock ETH', async() => {
+            beforeEach(async function () {
+                await deployContracts();
+
+                // Transfer 6000 ETH to contract
+                await sut.sendTransaction({from: accounts[0], to: sut.address, value: ethCap});
+            });
+
+            it('Unlocked ETH is linear function of time between 0 and 5 years', async () => {
+                var secondsIn5Years = 5 * 365.25 * 24 * 60 * 60;
+                var iterations = 50;
+                var step = parseInt(secondsIn5Years / iterations);
+
+                for (var s = 0; s < secondsIn5Years; s += step) {
+                    // Adjust time to s seconds after deployment
+                    await timeHelper.setTestRPCTime(genesis.add(s));
+
+                    await sut.allocateETH(0, recipient1, {from: decisionModuleAddr});
+                    var ETH_unlocked = web3.toBigNumber(await sut.ETH_unlocked());
+                    var ETH_balance = web3.toBigNumber(await sut.ETH_balance());
+                    var timeAfter = timeHelper.getCurrentTime();
+                    var ETH_unlockedExpectedTop = web3.toBigNumber(timeAfter).mul(ethCap).div(secondsIn5Years);
+                    var ETH_unlockedExpectedBottom = web3.toBigNumber(s).mul(ethCap).div(secondsIn5Years);
+
+                    ETH_unlocked.should.be.bignumber.at.least(ETH_unlockedExpectedBottom);
+                    ETH_unlocked.should.be.bignumber.at.most(ETH_unlockedExpectedTop);
+
+                    ETH_balance.should.be.bignumber.at.least(ETH_unlockedExpectedBottom);
+                    ETH_balance.should.be.bignumber.at.most(ETH_unlockedExpectedTop);
+                }
+            });
+
+            it('Unlocked ETH is flat function after 5 years', async () => {
+                var secondsIn5Years = 5 * 365.25 * 24 * 60 * 60;
+                var iterations = 10;
+                var step = parseInt(secondsIn5Years / iterations);
+
+                for (var s = secondsIn5Years; s < 2 * secondsIn5Years; s += step) {
+                    // Adjust time to s seconds after deployment
+                    await timeHelper.setTestRPCTime(genesis.add(s));
+
+                    await sut.allocateETH(0, recipient1, {from: decisionModuleAddr});
+                    var ETH_unlocked = web3.toBigNumber(await sut.ETH_unlocked());
+                    var ETH_balance = web3.toBigNumber(await sut.ETH_balance());
+
+                    ETH_unlocked.should.be.bignumber.equal(ethCap);
+                    ETH_balance.should.be.bignumber.equal(ethCap);
+                }
+
+            });
+        })
+
+        describe('Allocate and Claim ETH', async() => {
+            beforeEach(async function () {
+                await deployContracts();
+
+                // Transfer 6000 ETH to contract
+                await sut.sendTransaction({from: accounts[0], to: sut.address, value: ethCap});
+
+                // Adjust time to 5 years after deployment
+                var secondsIn5Years = 5 * 365.25 * 24 * 60 * 60;
+                await timeHelper.setTestRPCTime(genesis.add(secondsIn5Years));
+
+                // Trigger ETH unlock
+                await sut.allocateETH(0, recipient1, {from: decisionModuleAddr});
+            });
+
+            it('ETH is not allocated above ETH_balance', async () => {
+                var ETH_balance = web3.toBigNumber(await sut.ETH_balance());
+
+                await sut.allocateETH(ETH_balance.add(1), recipient1, {from: decisionModuleAddr}).should.be.rejected;
+            });
+
+            it('ETH is allocated and ETH_balance is correctly affected', async () => {
+                var ETH_balanceBefore = web3.toBigNumber(await sut.ETH_balance());
+                await sut.allocateETH(ETH_balanceBefore, recipient1, {from: decisionModuleAddr});
+                var allocation = web3.toBigNumber(await sut.ETH_allocations(recipient1));
+                var ETH_balanceAfter = web3.toBigNumber(await sut.ETH_balance());
+                ETH_balanceAfter.should.be.bignumber.equal(0);
+                allocation.should.be.bignumber.equal(ethCap);
+            });
+
+            it('Allocated ETH can be transferred to recipient', async () => {
+                var ETH_balanceBefore = web3.toBigNumber(await sut.ETH_balance());
+                await sut.allocateETH(ETH_balanceBefore, recipient1, {from: decisionModuleAddr});
+                var recipientBalanceBefore = web3.toBigNumber(await web3.eth.getBalance(recipient1));
+                await sut.claimETH({from: recipient1, gasPrice: 0});
+                var recipientBalanceAfter = web3.toBigNumber(await web3.eth.getBalance(recipient1));
+                recipientBalanceAfter.sub(recipientBalanceBefore).should.be.bignumber.equal(ETH_balanceBefore);
+            });
+
+            it('Allocated ETH can be transferred to two recipients', async () => {
+                var ETH_balanceBefore = web3.toBigNumber(await sut.ETH_balance());
+                await sut.allocateETH(ETH_balanceBefore.div(2), recipient1, {from: decisionModuleAddr});
+                await sut.allocateETH(ETH_balanceBefore.div(2), recipient2, {from: decisionModuleAddr});
+                var recipient1BalanceBefore = web3.toBigNumber(await web3.eth.getBalance(recipient1));
+                var recipient2BalanceBefore = web3.toBigNumber(await web3.eth.getBalance(recipient2));
+                await sut.claimETH({from: recipient1, gasPrice: 0});
+                await sut.claimETH({from: recipient2, gasPrice: 0});
+                var recipient1BalanceAfter = web3.toBigNumber(await web3.eth.getBalance(recipient1));
+                var recipient2BalanceAfter = web3.toBigNumber(await web3.eth.getBalance(recipient2));
+                recipient1BalanceAfter.sub(recipient1BalanceBefore).should.be.bignumber.equal(ETH_balanceBefore.div(2));
+                recipient2BalanceAfter.sub(recipient2BalanceBefore).should.be.bignumber.equal(ETH_balanceBefore.div(2));
+            });
+        })
     })
+
+
 
     describe('Inflation Rate', async() => {
         it('', async () => {
