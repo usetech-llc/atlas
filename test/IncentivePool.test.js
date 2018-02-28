@@ -29,6 +29,8 @@
  i) inflation = 0
  ii) inflation = 1
  iii) inflation = 0.5
+ d. last update and now are in dynamic period and distance between them is more than 2 years
+ i) 1 year inflation = 0.25, 2nd year inflation = 0.75
  UNLOCK ETH
  update ETH_balance & ETH_unlocked for all cases
  a. now is in unlocking period
