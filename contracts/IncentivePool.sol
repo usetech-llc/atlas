@@ -216,7 +216,7 @@ contract IncentivePool is IncentivePoolInterface {
 	}
 
 	// updates ACX supply every time rewards are allocated (based on time elapsed since last update)
-	function mintACX() private {
+	function mintACX() internal {
 		/* 3 cases:
 			a. last update and now are in deterministic period
 			b. last update is in deterministic period, now is dynamic period

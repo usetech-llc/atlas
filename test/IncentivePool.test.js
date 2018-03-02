@@ -31,6 +31,7 @@
  iii) inflation = 0.5
  d. last update and now are in dynamic period and distance between them is more than 2 years
  i) 1 year inflation = 0.25, 2nd year inflation = 0.75
+
  UNLOCK ETH
  update ETH_balance & ETH_unlocked for all cases
  a. now is in unlocking period
@@ -734,8 +735,233 @@ contract('IncentivePool', function (accounts) {
     })
 
     describe('Mint ACX', async() => {
-        it('', async () => {
-            throw new Error("Not implemented");
+        beforeEach(async function () {
+            await deployContracts();
+
+            // Mint tokens to vote/inflate
+            await token.setMinter(accounts[0]);
+            await token.mint(recipient1, 1000 * tokenMultiplier);
+            await token.setMinter(sut.address);
+        });
+
+        async function getMintValues() {
+            await sut.mintACXTestable();
+            const ts = web3.toBigNumber(await sut.last_ACX_update());
+            return {
+                minted: web3.toBigNumber(await sut.ACX_minted()),
+                mintedFromToken: web3.toBigNumber(await token.balanceOf(sut.address)),
+                mintTimestamp: ts,
+                curveVal: web3.toBigNumber(await sut.getCurveValueTestable(ts)),
+            };
+        }
+
+        it('Last update and now are both in deterministic period - 1 year', async () => {
+            // Move time to 1 year after genesis
+            await timeHelper.setTestRPCTime(genesis.add(365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints = await getMintValues();
+
+            mints.minted.should.be.bignumber.equal(mints.mintedFromToken);
+            mints.minted.should.be.bignumber.equal(mints.curveVal);
+        });
+
+        it('Last update and now are both in deterministic period - 2 years', async () => {
+            // Move time to 2 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(2 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints = await getMintValues();
+
+            mints.minted.should.be.bignumber.equal(mints.mintedFromToken);
+            mints.minted.should.be.bignumber.equal(mints.curveVal);
+        });
+
+        it('Last update is in deterministic period, now is dynamic period, inflation = 0', async () => {
+            // Move time to 1 year after genesis
+            await timeHelper.setTestRPCTime(genesis.add(365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints1 = await getMintValues();
+
+            // Do not set inflation, it will be 0 by default
+            const inflation = new BigNumber(0);
+
+            // Move time to 11 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints2 = await getMintValues();
+
+            const expectedMintedValue1 = mints1.curveVal;
+            const expectedMintedValue2 = mints2.curveVal;
+
+            // Because of rounding, the equality should be approximate (no fractions, token is integer)
+            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+        });
+
+        it('Last update is in deterministic period, now is dynamic period, inflation = 1%', async () => {
+            // Move time to 1 year after genesis
+            await timeHelper.setTestRPCTime(genesis.add(365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints1 = await getMintValues();
+
+            // Set inflation rate of 1% starting immediately after deterministic period
+            const totalSupply = web3.toBigNumber(await token.totalSupply());
+            const inflation = new BigNumber(0.01);
+            await sut.setInflationRate(totalSupply.mul(inflation), genesis.add(10 * 365.25 * 24 * 3600));
+
+            // Move time to 11 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints2 = await getMintValues();
+
+            const timePeriod = mints2.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const expectedMintedValue1 = mints1.curveVal;
+            const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod).div(secondsInOneYear));
+
+            // Because of rounding, the equality should be approximate (no fractions, token is integer)
+            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+        });
+
+        it('Last update is in deterministic period, now is dynamic period, inflation = 0.5%', async () => {
+            // Move time to 1 year after genesis
+            await timeHelper.setTestRPCTime(genesis.add(365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints1 = await getMintValues();
+
+            // Set inflation rate of 1% starting immediately after deterministic period
+            const totalSupply = web3.toBigNumber(await token.totalSupply());
+            const inflation = new BigNumber(0.005);
+            await sut.setInflationRate(totalSupply.mul(inflation), genesis.add(10 * 365.25 * 24 * 3600));
+
+            // Move time to 11 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints2 = await getMintValues();
+
+            const timePeriod = mints2.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const expectedMintedValue1 = mints1.curveVal;
+            const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod).div(secondsInOneYear));
+
+            // Because of rounding, the equality should be approximate (no fractions, token is integer)
+            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+        });
+
+        it('Last update and now are in dynamic period, inflation = 0', async () => {
+            // Set inflation rate of 0% starting immediately after deterministic period
+            const totalSupply = web3.toBigNumber(await token.totalSupply());
+            const inflation = new BigNumber(0);
+            //await sut.setInflationRate(totalSupply.mul(inflation), genesis.add(10 * 365.25 * 24 * 3600));
+
+            // Move time to 11 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints1 = await getMintValues();
+
+            // Move time to 12 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(12 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints2 = await getMintValues();
+
+            const timePeriod1 = mints1.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const timePeriod2 = mints2.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const expectedMintedValue1 = mints1.curveVal.add(totalSupply.mul(inflation).mul(timePeriod1).div(secondsInOneYear));;
+            const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod2).div(secondsInOneYear));
+
+            // Because of rounding, the equality should be approximate (no fractions, token is integer)
+            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+        });
+
+        it('Last update and now are in dynamic period, inflation = 1', async () => {
+            // Set inflation rate of 1% starting immediately after deterministic period
+            const totalSupply = web3.toBigNumber(await token.totalSupply());
+            const inflation = new BigNumber(0.01);
+            await sut.setInflationRate(totalSupply.mul(inflation), genesis.add(10 * 365.25 * 24 * 3600));
+
+            // Move time to 11 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints1 = await getMintValues();
+
+            // Move time to 12 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(12 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints2 = await getMintValues();
+
+            const timePeriod1 = mints1.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const timePeriod2 = mints2.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const expectedMintedValue1 = mints1.curveVal.add(totalSupply.mul(inflation).mul(timePeriod1).div(secondsInOneYear));;
+            const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod2).div(secondsInOneYear));
+
+            // Because of rounding, the equality should be approximate (no fractions, token is integer)
+            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+        });
+
+        it('Last update and now are in dynamic period, inflation = 0.5', async () => {
+            // Set inflation rate of 0.5% starting immediately after deterministic period
+            const totalSupply = web3.toBigNumber(await token.totalSupply());
+            const inflation = new BigNumber(0.005);
+            await sut.setInflationRate(totalSupply.mul(inflation), genesis.add(10 * 365.25 * 24 * 3600));
+
+            // Move time to 11 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints1 = await getMintValues();
+
+            // Move time to 12 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(12 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints2 = await getMintValues();
+
+            const timePeriod1 = mints1.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const timePeriod2 = mints2.mintTimestamp.sub(genesis.add(10 * 365.25 * 24 * 3600));
+            const expectedMintedValue1 = mints1.curveVal.add(totalSupply.mul(inflation).mul(timePeriod1).div(secondsInOneYear));
+            const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod2).div(secondsInOneYear));
+
+            // Because of rounding, the equality should be approximate (no fractions, token is integer)
+            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+        });
+
+        it('Last update and now are in dynamic period, multiple inflation rates', async () => {
+            // Move time to 10 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(10 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints1 = await getMintValues();
+
+            // Set inflation rate of 0.25% starting immediately after deterministic period
+            // and 0.75 for the second year
+            const totalSupply = web3.toBigNumber(await token.totalSupply());
+            const inflation1 = new BigNumber(0.0025);
+            await sut.setInflationRate(totalSupply.mul(inflation1), genesis.add(10 * 365.25 * 24 * 3600));
+            const inflation2 = new BigNumber(0.0075);
+            await sut.setInflationRate(totalSupply.mul(inflation2), genesis.add(11 * 365.25 * 24 * 3600));
+
+            // Move time to 12 years after genesis
+            await timeHelper.setTestRPCTime(genesis.add(12 * 365.25 * 24 * 3600));
+
+            // mint and measure
+            const mints2 = await getMintValues();
+
+            const timePeriod1 = new BigNumber(365.25 * 24 * 3600);
+            const timePeriod2 = mints2.mintTimestamp.sub(genesis.add(11 * 365.25 * 24 * 3600));
+            const expectedMintedValue1 = mints1.curveVal;
+            const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation1).mul(timePeriod1).div(secondsInOneYear))
+                                                        .add(totalSupply.mul(inflation2).mul(timePeriod2).div(secondsInOneYear));
+
+            // Because of rounding, the equality should be approximate (no fractions, token is integer)
+            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
         });
     })
 
@@ -877,13 +1103,4 @@ contract('IncentivePool', function (accounts) {
             });
         })
     })
-
-
-
-    describe('Inflation Rate', async() => {
-        it('', async () => {
-            throw new Error("Not implemented");
-        });
-    })
-
 });
