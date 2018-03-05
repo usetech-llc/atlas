@@ -156,7 +156,7 @@ contract('IncentivePool', function (accounts) {
     })
 
     describe('Allocate ACX', async() => {
-        describe('ACX deterministic curve', async() => {
+        describe.skip('ACX deterministic curve - exponential', async() => {
             it('Equals 0 at genesis time', async () => {
                 var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis));
                 curveVal.should.be.bignumber.equal(0);
@@ -309,6 +309,159 @@ contract('IncentivePool', function (accounts) {
             });
         })
 
+        describe('ACX deterministic curve - hyperbolic', async() => {
+            it('Equals 0 at genesis time', async () => {
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis));
+                curveVal.should.be.bignumber.equal(0);
+            });
+
+            it('Equals 1.62 billion 10+ years after genesis time', async () => {
+                var secondsIn10Years = 365.25 * 24 * 60 * 60 * 10 + 1;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(secondsIn10Years)));
+                curveVal.should.be.bignumber.equal(1.62e9 * tokenMultiplier);
+            });
+
+            it('1 second value is within 10%', async () => {
+                var seconds = 1;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 6 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.1);
+            });
+
+            it('10 second value is within 5%', async () => {
+                var seconds = 10;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 60 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.05);
+            });
+
+            it('18 day value is within 2%', async () => {
+                var seconds = 18 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 9331200.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.02);
+            });
+
+            it('30 day value is within 1%', async () => {
+                var seconds = 30 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 15552000.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.01);
+            });
+
+            it('60 day value is within 0.5%', async () => {
+                var seconds = 60 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 31104000.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.005);
+            });
+
+            it('180 day value is within 0.1%', async () => {
+                var seconds = 180 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 93312000.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.001);
+            });
+
+            it('1 year value is within 0.02%', async () => {
+                var seconds = 1 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 189345600.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0002);
+            });
+
+            it('383 day value is within 0.1%', async () => {
+                var seconds = 383 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 198547200.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.001);
+            });
+
+            it('2 year value is within 0.01%', async () => {
+                var seconds = 2 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 378691200.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('3 year value is within 0.01%', async () => {
+                var seconds = 3 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 568036800.00 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('4 year value is within 0.01%', async () => {
+                var seconds = 4 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 757382399.64 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('5 year value is within 0.01%', async () => {
+                var seconds = 5 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 946727904.65 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('6 year value is within 0.01%', async () => {
+                var seconds = 6 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 1136064504.38 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('7 year value is within 0.01%', async () => {
+                var seconds = 7 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 1324991484.97 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('8 year value is within 0.01%', async () => {
+                var seconds = 8 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 1503643715.68 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('9 year value is within 0.01%', async () => {
+                var seconds = 9 * 365.25 * 24 * 60 * 60;
+                var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                var expectedVal = 1602975705.84 * tokenMultiplier;
+                var errorVal = Math.abs(expectedVal - curveVal) / expectedVal;
+                errorVal.should.be.lessThan(0.0001);
+            });
+
+            it('Curve is uniformly increasing', async () => {
+                var secondsIn10Years = 365.25 * 24 * 60 * 60 * 10;
+                var iterations = 1000;
+                var step = parseInt(secondsIn10Years/iterations);
+                var prevValue = 0;
+                for (var seconds=step; seconds<secondsIn10Years; seconds+=step) {
+                    var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
+                    prevValue.should.be.bignumber.lessThan(curveVal);
+                    prevValue = curveVal;
+                }
+            });
+        })
+
         describe('allocateACX Method security', async() => {
             it('Should be callable by Decision Module', async () => {
                 await sut.allocateACX(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
@@ -363,7 +516,7 @@ contract('IncentivePool', function (accounts) {
             });
 
             it('Should increase ACX_allocations by requested amount', async () => {
-                var amount = tokenMultiplier.mul(70000000);
+                var amount = tokenMultiplier.mul(10000000);
 
                 // Call ACX Allocate and measure minted balance
                 var ACX_allocationsBefore = web3.toBigNumber(await sut.ACX_allocations(recipient1));
@@ -376,7 +529,7 @@ contract('IncentivePool', function (accounts) {
 
             it('Should decrease ACX_balance by requested amount', async () => {
                 var zeroAmount = 0;
-                var amount = tokenMultiplier.mul(70000000);
+                var amount = tokenMultiplier.mul(10000000);
 
                 // Get curve value for 30 days
                 var seconds = 30 * 24 * 60 * 60;
@@ -727,7 +880,7 @@ contract('IncentivePool', function (accounts) {
         it('Allocate and claim ACX', async () => {
             await timeHelper.setTestRPCTime(genesis.add(30 * 24 * 3600));
 
-            var amount = tokenMultiplier.mul(70000000);
+            var amount = tokenMultiplier.mul(10000000);
             await sut.allocateACX(amount, recipient1, {from: decisionModuleAddr});
             await sut.claimACX({from: recipient1});
             amount.should.be.bignumber.equal(await token.balanceOf(recipient1));
@@ -797,7 +950,9 @@ contract('IncentivePool', function (accounts) {
             const expectedMintedValue2 = mints2.curveVal;
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+            const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
+            const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
+            approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
         });
 
         it('Last update is in deterministic period, now is dynamic period, inflation = 1%', async () => {
@@ -823,7 +978,9 @@ contract('IncentivePool', function (accounts) {
             const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod).div(secondsInOneYear));
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+            const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
+            const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
+            approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
         });
 
         it('Last update is in deterministic period, now is dynamic period, inflation = 0.5%', async () => {
@@ -849,7 +1006,9 @@ contract('IncentivePool', function (accounts) {
             const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod).div(secondsInOneYear));
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+            const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
+            const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
+            approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
         });
 
         it('Last update and now are in dynamic period, inflation = 0', async () => {
@@ -876,10 +1035,12 @@ contract('IncentivePool', function (accounts) {
             const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod2).div(secondsInOneYear));
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+            const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
+            const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
+            approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
         });
 
-        it('Last update and now are in dynamic period, inflation = 1', async () => {
+        it('Last update and now are in dynamic period, inflation = 1%', async () => {
             // Set inflation rate of 1% starting immediately after deterministic period
             const totalSupply = web3.toBigNumber(await token.totalSupply());
             const inflation = new BigNumber(0.01);
@@ -903,10 +1064,12 @@ contract('IncentivePool', function (accounts) {
             const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod2).div(secondsInOneYear));
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+            const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
+            const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
+            approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
         });
 
-        it('Last update and now are in dynamic period, inflation = 0.5', async () => {
+        it('Last update and now are in dynamic period, inflation = 0.5%', async () => {
             // Set inflation rate of 0.5% starting immediately after deterministic period
             const totalSupply = web3.toBigNumber(await token.totalSupply());
             const inflation = new BigNumber(0.005);
@@ -930,7 +1093,9 @@ contract('IncentivePool', function (accounts) {
             const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod2).div(secondsInOneYear));
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+            const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
+            const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
+            approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
         });
 
         it('Last update and now are in dynamic period, multiple inflation rates', async () => {
@@ -961,7 +1126,9 @@ contract('IncentivePool', function (accounts) {
                                                         .add(totalSupply.mul(inflation2).mul(timePeriod2).div(secondsInOneYear));
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            mints2.minted.sub(mints1.minted).should.be.bignumber.equal(expectedMintedValue2.sub(expectedMintedValue1).floor(0));
+            const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
+            const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
+            approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
         });
     })
 

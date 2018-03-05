@@ -151,17 +151,29 @@ contract IncentivePool is IncentivePoolInterface {
 		uint256 timeVal = _timestamp - genesis;
 		uint256 step = curveTb.timeStep();
 		uint256 dataLen = curveTb.dataLen();
+		uint256 skipPoints = curveTb.skipPoints();
 		uint256 curveCap = curveTb.curveCap();
 		uint256 p1 = uint256(timeVal / step);
-		uint256 p2 = p1 + 1;
 
 		// Interpolate linearly value at timestamp
-		if (p2 >= dataLen) {
+		if (p1 >= dataLen-1) {
 			return deterministicCap;
 		} else {
+			// Adjust to skipped data (for optimization)
+			if (p1 <= skipPoints) {
+				uint256 retValSkip = deterministicCap * curveTb.curveData(1) * timeVal;
+				retValSkip /= (skipPoints+1);
+				retValSkip /= step;
+				retValSkip /= curveCap;
+				return retValSkip;
+			}
+			p1 -= skipPoints;
+			uint256 p2 = p1 + 1;
+			uint256 time1 = step * (p1 + skipPoints);
+			uint256 time2 = step * (p2 + skipPoints);
 			uint256 v1 = curveTb.curveData(p1);
 			uint256 v2 = curveTb.curveData(p2);
-			uint256 retVal = deterministicCap * (v2 * (timeVal - step * p1) + v1 * (step * p2 - timeVal));
+			uint256 retVal = deterministicCap * (v2 * (timeVal - time1) + v1 * (time2 - timeVal));
 			retVal /= step;
 			retVal /= curveCap;
 			return retVal;
