@@ -1078,10 +1078,6 @@ contract('IncentivePool', function (accounts) {
                 await sut.allocateETH(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
             });
 
-            it('Should be callable by Governance', async () => {
-                await sut.allocateETH(0, recipient1, {from: governanceAddr}).should.be.fulfilled;
-            });
-
             it('Should not be callable from non-controller address', async () => {
                 await sut.allocateETH(0, recipient1, {from: recipient1}).should.be.rejected;
             });
