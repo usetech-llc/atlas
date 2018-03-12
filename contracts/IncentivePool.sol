@@ -4,12 +4,16 @@ import "./Relay.sol";
 import "./AccessToken.sol";
 import "./IncentivePoolInterface.sol";
 import "zeppelin-solidity/contracts/math/SafeMath.sol";
+import "./DecisionModule.sol";
+import "./IncentivePoolParams.sol";
 
-contract IncentivePool is IncentivePoolInterface {
+contract IncentivePool is IncentivePoolInterface, IncentivePoolParams {
 	using SafeMath for uint256;
 
 	/*** FIELDS ***/
 	Relay public relay; // CHANGE
+
+	DecisionModule public decision_module;
 
 	// Token information
 	AccessToken private token;
@@ -62,7 +66,7 @@ contract IncentivePool is IncentivePoolInterface {
 	*
 	*/
 	modifier onlyController() {
-		require(relay.decision_module() == msg.sender || relay.governance() == msg.sender);
+		require(decision_module.dm_address() == msg.sender);
 		_;
 	}
 
@@ -85,6 +89,13 @@ contract IncentivePool is IncentivePoolInterface {
 
 		uint256 decimals = token.decimals();
 		deterministicCap = deterministicCap.mul(10 ** decimals);
+	}
+
+	function setDecisionModule(address _dm_address) external {
+		decision_module = DecisionModule(_dm_address);
+		if(IncentivePoolParams.dm_interfaceID != decision_module.interfaceID()){
+			revert();
+		}
 	}
 
 	/**

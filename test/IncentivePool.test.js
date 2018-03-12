@@ -60,6 +60,7 @@ contract('IncentivePool', function (accounts) {
     const IncentivePool = artifacts.require('./../contracts/IncentivePoolStub.sol');
     const Relay = artifacts.require('./../contracts/Relay.sol');
     const AccessToken = artifacts.require('./../contracts/AccessToken.sol');
+    const DecisionModuleImpl = artifacts.require('./../contracts/DecisionModuleImpl.sol');
     const IncentivePoolParams = (_relayAddress, _tokenAddress) => {
         return Object.values({
             _relayAddress: _relayAddress,
@@ -103,6 +104,10 @@ contract('IncentivePool', function (accounts) {
 
         preDeploymentTime = timeHelper.getCurrentTime();
         sut = await IncentivePool.new(...IncentivePoolParams(relay.address, token.address), {gas: 10000000});
+
+        var dm = await DecisionModuleImpl.new(decisionModuleAddr, {gas: 10000000});
+        await sut.setDecisionModule(dm.address);
+
         pastDeploymentTime = timeHelper.getCurrentTime();
         genesis = web3.toBigNumber(await sut.genesis());
         var tokenDecimals = web3.toBigNumber(await token.decimals());
@@ -465,10 +470,6 @@ contract('IncentivePool', function (accounts) {
         describe('allocateACX Method security', async() => {
             it('Should be callable by Decision Module', async () => {
                 await sut.allocateACX(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
-            });
-
-            it('Should be callable by Governance', async () => {
-                await sut.allocateACX(0, recipient1, {from: governanceAddr}).should.be.fulfilled;
             });
 
             it('Should not be callable from non-controller address', async () => {
@@ -1268,6 +1269,33 @@ contract('IncentivePool', function (accounts) {
                 recipient1BalanceAfter.sub(recipient1BalanceBefore).should.be.bignumber.equal(ETH_balanceBefore.div(2));
                 recipient2BalanceAfter.sub(recipient2BalanceBefore).should.be.bignumber.equal(ETH_balanceBefore.div(2));
             });
+        })
+
+        describe('Set Decision Module', async() => {
+            beforeEach(async() => {
+                await deployContracts();
+            });
+            
+            it('Create and set valid Decision Module', async() => {
+                var dm = await DecisionModuleImpl.new(decisionModuleAddr, {gas: 10000000});
+                await sut.setDecisionModule(dm.address).should.be.fulfilled;
+                await sut.setDecisionModule(token.address).should.be.rejected;
+            });
+            
+            it('"Only controller" methods can be called only by decision module address', async() => {
+                var dm = await DecisionModuleImpl.new(decisionModuleAddr, {gas: 10000000});
+                await sut.setDecisionModule(dm.address);
+
+                await sut.allocateACX(0, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
+                await sut.allocateACX(0, recipient1, {from: recipient1}).should.be.rejected;
+
+                dm = await DecisionModuleImpl.new(recipient1, {gas: 10000000});
+                await sut.setDecisionModule(dm.address);
+
+                await sut.allocateACX(0, recipient1, {from: decisionModuleAddr}).should.be.rejected;
+                await sut.allocateACX(0, recipient1, {from: recipient1}).should.be.fulfilled;
+            });
+            
         })
     })
 });
