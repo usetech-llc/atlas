@@ -2,9 +2,10 @@ pragma solidity ^0.4.16;
 import "./IncentiveCurveTable.sol";
 import "./Relay.sol";
 import "./AccessToken.sol";
+import "./IncentivePoolInterface.sol";
 import "zeppelin-solidity/contracts/math/SafeMath.sol";
 
-contract IncentivePool {
+contract IncentivePool is IncentivePoolInterface {
 	using SafeMath for uint256;
 
 	/*** FIELDS ***/
@@ -49,10 +50,10 @@ contract IncentivePool {
 	//   3. Inflation for last value in inflation_timestamp <= timestamp is last value in inflation_rate
 	uint256[] public inflation_rate;
 	uint256[] public inflation_timestamp; // Inflation period beginning timestamps
-	uint256 public constant inflation_peiod = seconds_in_one_year;
+	uint256 public constant inflation_period = seconds_in_one_year;
 	uint256 public last_inflation_update;
 	uint256 public inflation_support;
-	mapping (address => bool) public inflation_votes;
+	mapping (address => uint256) public inflation_votes;	// Balances of voted wallets (at the time of voting)
 
 	/*** MODIFIERS ***/
 
@@ -61,7 +62,7 @@ contract IncentivePool {
 	*
 	*/
 	modifier onlyController() {
-		require(relay.decision_module() == msg.sender || relay.governance() == msg.sender);
+		require(relay.decisionModuleAddress() == msg.sender || relay.governanceAddress() == msg.sender);
 		_;
 	}
 
@@ -85,6 +86,14 @@ contract IncentivePool {
 		uint256 decimals = token.decimals();
 		deterministicCap = deterministicCap.mul(10 ** decimals);
 	}
+
+	/**
+    *  Default method
+    *
+    *  Receive all ETH that is sent to this contract from any address
+    */
+    function () external payable {
+    }
 
 	// Following the "Withdrawal from Contracts" pattern (https://solidity.readthedocs.io/en/latest/common-patterns.html#withdrawal-from-contracts)
 	function allocateACX(uint payout, address recipient) external onlyController {
@@ -142,17 +151,29 @@ contract IncentivePool {
 		uint256 timeVal = _timestamp - genesis;
 		uint256 step = curveTb.timeStep();
 		uint256 dataLen = curveTb.dataLen();
+		uint256 skipPoints = curveTb.skipPoints();
 		uint256 curveCap = curveTb.curveCap();
 		uint256 p1 = uint256(timeVal / step);
-		uint256 p2 = p1 + 1;
 
 		// Interpolate linearly value at timestamp
-		if (p2 >= dataLen) {
+		if (p1 >= dataLen-1) {
 			return deterministicCap;
 		} else {
+			// Adjust to skipped data (for optimization)
+			if (p1 <= skipPoints) {
+				uint256 retValSkip = deterministicCap * curveTb.curveData(1) * timeVal;
+				retValSkip /= (skipPoints+1);
+				retValSkip /= step;
+				retValSkip /= curveCap;
+				return retValSkip;
+			}
+			p1 -= skipPoints;
+			uint256 p2 = p1 + 1;
+			uint256 time1 = step * (p1 + skipPoints);
+			uint256 time2 = step * (p2 + skipPoints);
 			uint256 v1 = curveTb.curveData(p1);
 			uint256 v2 = curveTb.curveData(p2);
-			uint256 retVal = deterministicCap * (v2 * (timeVal - step * p1) + v1 * (step * p2 - timeVal));
+			uint256 retVal = deterministicCap * (v2 * (timeVal - time1) + v1 * (time2 - timeVal));
 			retVal /= step;
 			retVal /= curveCap;
 			return retVal;
@@ -207,7 +228,7 @@ contract IncentivePool {
 	}
 
 	// updates ACX supply every time rewards are allocated (based on time elapsed since last update)
-	function mintACX() private {
+	function mintACX() internal {
 		/* 3 cases:
 			a. last update and now are in deterministic period
 			b. last update is in deterministic period, now is dynamic period
@@ -259,15 +280,15 @@ contract IncentivePool {
 	*/
 	function inflationSwitch() public {
 		// flip the inflation vote of the sender's tokens
-		bool support = inflation_votes[msg.sender];
-		uint256 balance = token.balanceOf(msg.sender);
-		if (support) {
-			inflation_votes[msg.sender] = false;
-			inflation_support = inflation_support.sub(balance);
+        uint256 voted_balance = inflation_votes[msg.sender];
+		if (voted_balance > 0) {
+			inflation_votes[msg.sender] = 0;
+            inflation_support = inflation_support.sub(voted_balance);
 		}
 		else {
-			inflation_votes[msg.sender] = true;
-			inflation_support = inflation_support.add(balance);
+            uint256 current_balance = token.balanceOf(msg.sender);
+			inflation_votes[msg.sender] = current_balance;
+			inflation_support = inflation_support.add(current_balance);
 		}
 	}
 
@@ -277,12 +298,14 @@ contract IncentivePool {
 	*
 	* @param _addr - address to reset the vote for
 	*/
-	function resetInflationVote(address _addr) external onlyController {
-		bool support = inflation_votes[_addr];
-		if (support) {
-			uint256 balance = token.balanceOf(_addr);
-			inflation_votes[_addr] = false;
-			inflation_support = inflation_support.sub(balance);
+	function resetInflationVote(address _addr) external {
+		// Only token contract can call this method
+		require(msg.sender == address(token));
+
+		uint256 voted_balance = inflation_votes[_addr];
+		if (voted_balance > 0) {
+			inflation_votes[_addr] = 0;
+			inflation_support = inflation_support.sub(voted_balance);
 		}
 	}
 
@@ -293,8 +316,8 @@ contract IncentivePool {
 	*/
 	function updateInflation() external onlyController {
 		uint256 currentTime = now;
-		require(currentTime > last_inflation_update + inflation_peiod);
-		require(currentTime >= deterministic_minting_period);
+		require(currentTime > last_inflation_update + inflation_period);
+		require(currentTime >= genesis + deterministic_minting_period);
 
 		inflation_timestamp.push(currentTime);
 

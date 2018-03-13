@@ -2,6 +2,10 @@ var AccessToken = artifacts.require("./AccessToken.sol");
 var AccessTokenSale = artifacts.require("./AccessTokenSale.sol");
 var AccessTokenVesting = artifacts.require('./AccessTokenVesting.sol');
 
+var Governance = artifacts.require('./Governance.sol');
+var DecisionModule = artifacts.require('./DecisionModule.sol');
+var Relay = artifacts.require('./Relay.sol');
+
 module.exports = function(deployer , network , accounts) {	
 	var owner = accounts[0];
 		
@@ -38,6 +42,37 @@ module.exports = function(deployer , network , accounts) {
 				});
 			});	
 
+
+			deployer.deploy(Governance , tokenInstance.address).then(function() {
+				Governance.deployed().then(async function(governanceInstance) {
+					console.log('----------------------------------');
+					console.log('Governance Instance' , governanceInstance.address);
+					console.log('----------------------------------');
+
+					
+					deployer.deploy(DecisionModule , tokenInstance.address).then(function() {
+						DecisionModule.deployed().then(async function(decisionModuleInstance) {
+							console.log('----------------------------------');
+							console.log('Decision Module Instance' , decisionModuleInstance.address);
+							console.log('----------------------------------');
+
+							
+							deployer.deploy(Relay , tokenInstance.address, governanceInstance.address , decisionModuleInstance.address).then(function() {
+								Relay.deployed().then(async function(relayInstance) {
+									console.log('----------------------------------');
+									console.log('Relay Instance' , relayInstance.address);
+									console.log('----------------------------------');
+
+									// set reference to governance instance
+									await tokenInstance.setRelay(relayInstance.address);
+									await governanceInstance.setRelay(relayInstance.address);
+									await decisionModuleInstance.setRelay(relayInstance.address);
+								});
+							});
+						});
+					});		
+				});
+			});	
 		});			
 	});	
 };

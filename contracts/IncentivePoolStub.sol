@@ -3,7 +3,9 @@ import './IncentivePool.sol';
 
 contract IncentivePoolStub is IncentivePool {
 
-  function IncentivePoolStub(address _relay, address _token) public
+	uint256 public last_ACX_update;
+
+	function IncentivePoolStub(address _relay, address _token) public
 		IncentivePool(_relay, _token) {
 	}
 
@@ -11,8 +13,17 @@ contract IncentivePoolStub is IncentivePool {
 		return getCurveValue(_timestamp);
 	}
 
-	function getMintedAmountForTimestampTestable(uint256 timeStamp) internal constant returns (uint256 mintedTokenAmount) {
+	function getMintedAmountForTimestampTestable(uint256 timeStamp) public constant returns (uint256 mintedTokenAmount) {
 		return getMintedAmountForTimestamp(timeStamp);
 	}
 
+	function mintACXTestable() public {
+		mintACX();
+		last_ACX_update = now;
+	}
+
+	function setInflationRate(uint256 _rate, uint256 _timestamp) public {
+		inflation_timestamp.push(_timestamp);
+		inflation_rate.push(_rate);
+	}
 }
