@@ -2,15 +2,19 @@ pragma solidity ^0.4.18;
 
 import "zeppelin-solidity/contracts/token/ERC20/MintableToken.sol";
 import "./IncentivePool.sol";
+import "./Relay.sol";
 
 contract AccessToken is MintableToken {
-
 	string public constant name = "AccessToken";
 	string public constant symbol = "ACX";
 	uint8 public constant decimals = 18;
 
 	address private minter;
 	IncentivePool private incentivePool;
+
+	// current governance relay contract address
+	address public relayAddress;
+	Relay public relay;
 
 	/**
 	* Modifier: only allowed addresses can mint
@@ -20,6 +24,9 @@ contract AccessToken is MintableToken {
 		require((minter == msg.sender) || (owner == msg.sender));
 		_;
 	}
+
+	// governance change event
+	event RelayChanged(address indexed _relayAddress);
 
 	function AccessToken() public {
 	}
@@ -58,31 +65,48 @@ contract AccessToken is MintableToken {
 	}
 
 	/**
-	*  Overrides standard transfer method to support voting reset
-	*
-	* @param _to - token receiver
-	* @param _value - amount to transfer (in token * 10^decimals units)
-	* @return true in case of success
-	*/
-	function transfer(address _to, uint256 _value) public returns (bool) {
-		// Reset sender's inflation vote in incentive pool
-		incentivePool.resetInflationVote(msg.sender);
-
-		return BasicToken.transfer(_to, _value);
+	 * @dev set new governance relay contract
+	 *
+	 * @param _relayAddress address of governance relay contract
+	 */
+	function setRelay(address _relayAddress) public onlyOwner {
+		relayAddress = _relayAddress;
+		relay = Relay(relayAddress);
+		RelayChanged(_relayAddress);
 	}
 
 	/**
-	*  Overrides standard transferFrom method to support voting reset
-	*
-	* @param _from - token spender
-	* @param _to - token receiver
-	* @param _value - amount to transfer (in token * 10^decimals units)
-	* @return true in case of success
-	*/
+	 * @dev transfer token for a specified address
+	 * @param _to The address to transfer to.
+	 * @param _value The amount to be transferred.
+	 */
+	function transfer(address _to, uint256 _value) public returns (bool) {
+		//require(relay.transferLocked(msg.sender, _to) == false);
+
+		// Reset sender's inflation vote in incentive pool
+		incentivePool.resetInflationVote(msg.sender);
+
+		bool result = super.transfer(_to , _value);
+		relay.transfer(msg.sender , _to , _value);
+
+		return result;
+	}
+
+	/**
+	 * @dev Transfer tokens from one address to another
+	 * @param _from address The address which you want to send tokens from
+	 * @param _to address The address which you want to transfer to
+	 * @param _value uint256 the amount of tokens to be transferred
+	 */
 	function transferFrom(address _from, address _to, uint256 _value) public returns (bool) {
+		require(relay.transferLocked(_from, _to) == false);
+
 		// Reset sender's inflation vote in incentive pool
 		incentivePool.resetInflationVote(_from);
 
-		return StandardToken.transferFrom(_from, _to, _value);
+		bool result = super.transferFrom(_from , _to , _value);
+		relay.transfer(_from , _to , _value);
+
+		return result;
 	}
 }

@@ -1,40 +1,113 @@
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.18;
+
+import "zeppelin-solidity/contracts/math/SafeMath.sol";
+import "zeppelin-solidity/contracts/ownership/Ownable.sol";
+import "./AccessToken.sol";
+import "./Governance.sol";
+import "./DecisionModule.sol";
 
 contract Relay {
+	using SafeMath for uint256;
 
-	/*** FIELDS ***/
-	address public governance;
-	address public decision_module;
-	address public constant incentive_pool = 0x00;	//CHANGE
+	// current token contract address
+	address public tokenAddress;
+	AccessToken public token;
 
-	/*** MODIFIERS ***/
+	// current governance contract address
+	address public governanceAddress;
+	Governance public governance;
+
+	// current decision module address
+	address public decisionModuleAddress;
+	DecisionModule public decisionModule;
+
+	// governance change event
+	event GovernanceChanged(address indexed _governanceAddress);
+
+	// decision module change event
+	event DecisionModuleChanged(address indexed _decisionModuleAddress);
+
+	/**
+	 * @dev initializes contract with default contracts
+	 *
+	 * @param _governanceAddress address of governance address
+	 * @param _decisionModuleAddress address of decision module address
+	 */
+	function Relay(address _tokenAddress , address _governanceAddress , address _decisionModuleAddress) public {
+		tokenAddress = _tokenAddress;
+		token = AccessToken(tokenAddress);
+
+		governanceAddress = _governanceAddress;
+		governance = Governance(governanceAddress);
+
+		decisionModuleAddress = _decisionModuleAddress;
+		decisionModule = DecisionModule(decisionModuleAddress);
+	}
+
+	/**
+	 * @dev modifier to check only governance can call it
+	 *
+	 */
 	modifier onlyGovernance() {
-		require(governance == msg.sender); // only run if called by Governance Contract
+		// added this condition because governance contract might push decision module based on counter
+		// see test case "governance : close : should allow close finalist with quorum reached"
+		require(governanceAddress == msg.sender);
 		_;
 	}
 
-	/*** FUNCTIONS ***/
-	function Relay(address initial_governance) public {
-		governance = initial_governance;
-		decision_module = 0x0;
+	/**
+	 * @dev modifier to check only token can call it
+	 *
+	 */
+	modifier onlyToken() {
+		require(tokenAddress == msg.sender);
+		_;
 	}
 
-	// swap governance address following successful governance cycle
-	function setGovernance(address new_governance) public onlyGovernance {
-		governance = new_governance; // set new governance address
+	/**
+	 * @dev set new governance contract
+	 *
+	 * @param _governanceAddress address of governance contract
+	 */
+	function setGovernance(address _governanceAddress) public onlyGovernance {
+		governanceAddress = _governanceAddress;
+		governance = Governance(governanceAddress);
+		GovernanceChanged(_governanceAddress);
 	}
 
-	function setDecisionModule(address new_decision_module) public onlyGovernance {
-		decision_module = new_decision_module; // set new decision module address
+	/**
+	 * @dev set new decision module contract
+	 *
+	 * @param _decisionModuleAddress address of decision module contract
+	 */
+	function setDecisionModule(address _decisionModuleAddress) public onlyGovernance {
+		decisionModuleAddress = _decisionModuleAddress;
+		decisionModule = DecisionModule(decisionModuleAddress);
+		DecisionModuleChanged(_decisionModuleAddress);
 	}
 
-	// this can be a return function that just returns the current addresses of the DM and G contracts
-	function() public {
-		// find way to do dynamic call delegation... option to delegatecall to governance or DM
-		require(governance.delegatecall(msg.data) || decision_module.delegatecall(msg.data)); // this is an expensive approach
+    /**
+	 * @dev sends token transfer call to active contract
+	 *
+	 * @param from address The address which you want to send tokens from
+	 * @param to address The address which you want to transfer to
+	 * @param value uint256 the amount of tokens to be transferred
+	 */
+	function transfer(address from, address to, uint256 value) public onlyToken {
+		governance.transfer(from, to, value);
+		decisionModule.transfer(from, to, value);
 	}
-	/* apparently delegatecall only forwards and cannot return values from functions? ... if so this is problematic */
 
+	/**
+	* @dev checks transfer function is locked or not
+	* whenver tokens are transferred between two accounts
+	*
+	* @param from address The address which you want to send tokens from
+	* @param to address The address which you want to receive tokens to
+	*/
+	function transferLocked(address from, address to) public view returns (bool) {
+		return governance.transferLocked(from, to) || decisionModule.transferLocked(from, to);
+	}
 }
 
 // inspired by https://consensys.github.io/smart-contract-best-practices/software_engineering/

@@ -4,7 +4,7 @@ import "zeppelin-solidity/contracts/math/SafeMath.sol";
 import "zeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./Timestamped.sol";
 import "./AccessToken.sol";
-import "./Relay.sol";
+import "./GovernanceRelay.sol";
 
 contract Governance is Ownable, Timestamped {
 	using SafeMath for uint256;
@@ -14,17 +14,32 @@ contract Governance is Ownable, Timestamped {
 	AccessToken public token;
 
 	// current governance relay contract address 
-	address public relayAddress;
-	Relay public relay;
+	address public governanceRelayAddress;
+	GovernanceRelay public governanceRelay;
 
 	// array of candidate addresses
 	mapping(uint256 => address[]) public candidates;
 
+	// mapping of candidate indexes
+	mapping(uint256 => mapping(address => uint256)) public candidateIndex;
+
 	// number of candidate addresses
 	mapping(uint256 => uint256) public candidateCount;
 
+	// map to keep candidate owner
+	mapping(uint256 => mapping (address => address)) public candidateOwner;
+
 	// weight given to candidate 
 	mapping(uint256 => mapping (address => uint256)) public candidateWeight;
+
+	// array of voter addresses
+	mapping(uint256 => address[]) public voters;
+
+	// mapping of voter indexes
+	mapping(uint256 => mapping (address => uint256)) public voterIndex;
+
+	// number of voter addresses
+	mapping(uint256 => uint256) public voterCount;
 
 	// mapping to track who voted whom
 	mapping(uint256 => mapping (address => address)) public voterCandidate;
@@ -36,13 +51,24 @@ contract Governance is Ownable, Timestamped {
 	mapping(uint256 => address) public finalist;
 	mapping(uint256 => uint256) public finalistWeight;
 
+	// array of supporter addresses
+	mapping(uint256 => address[]) public supporters;
+
+	// mapping to supporter index
+	mapping(uint256 => mapping(address => uint256)) public supporterIndex;
+
+	// number of supporter addresses
+	mapping(uint256 => uint256) public supporterCount;
+
 	// finalist supporters
 	mapping(uint256 => mapping (address => uint256)) public finalistSupporters;
 	mapping(uint256 => uint256) public finalistSupport;
 
-	// if cycle is closed 
-	mapping(uint256 => bool) public closed;
-
+	// decided contract variables 
+	mapping(uint256 => address) public decided;
+	mapping(uint256 => uint256) public decidedWeight;	
+	mapping(uint256 => uint256) public decidedSupport;
+	
 	// quorum percentage
 	uint public constant quorum = 50;
 
@@ -54,6 +80,9 @@ contract Governance is Ownable, Timestamped {
 
 	// candidate submit event
 	event SubmitEvent(uint256 indexed _cycle, address indexed _sender , address indexed _candidate);
+
+	// candidate cancel event
+	event CancelEvent(uint256 indexed _cycle, address indexed _sender , address indexed _candidate);
 
 	// candidate choose event
 	event ChooseEvent(uint256 indexed _cycle, address indexed _sender , address indexed _candidate , uint256 _balance);
@@ -73,6 +102,9 @@ contract Governance is Ownable, Timestamped {
 	// finalist dither event
 	event DitherEvent(uint256 indexed _cycle, address indexed _sender , address indexed _finalist , uint256 _balance);
 
+	// governance change event
+	event GovernanceRelayChanged(address indexed _governanceRelayAddress);
+
 	/**
 	 * @dev constructor initialization
 	 *
@@ -84,23 +116,14 @@ contract Governance is Ownable, Timestamped {
 	}
 
 	/**
-	 * @dev modifier to check only relay can call it
-	 *
-	 */
-	modifier onlyRelay() {
-		require(relayAddress == msg.sender);
-		_;
-	}
-
-	/**
 	 * @dev set governance relay contract
 	 *
-	 * @param _relayAddress address of governance relay contract
+	 * @param _governanceRelayAddress address of governance relay contract
 	 */
-	function setRelay(address _relayAddress) public onlyOwner {
-		require(relayAddress == address(0));
-		relayAddress = _relayAddress;
-		relay = Relay(relayAddress);
+	function setGovernanceRelay(address _governanceRelayAddress) public onlyOwner {
+		governanceRelayAddress = _governanceRelayAddress;
+		governanceRelay = GovernanceRelay(governanceRelayAddress);
+		GovernanceRelayChanged(_governanceRelayAddress);
 	}
 
 	/**
@@ -147,17 +170,48 @@ contract Governance is Ownable, Timestamped {
 		// check if submission stage is running
 		require(stage() == 1);
 		// check if candidate is not submitted before
-		require(candidateWeight[cycleCounter][candidate] == 0);
+		require(candidateOwner[cycleCounter][candidate] == address(0));
 
 		// add candidate to list 
+		candidateIndex[cycleCounter][candidate] = candidateCount[cycleCounter];
 		candidates[cycleCounter].length ++;
 		candidates[cycleCounter][candidateCount[cycleCounter] ++] = candidate;
 
-		// set candidate to valid one by setting 1 default weight
-		candidateWeight[cycleCounter][candidate] = 1;
+		// set candidate to valid one
+		candidateOwner[cycleCounter][candidate] = msg.sender;
 
 		// emit the event 
 		SubmitEvent(cycleCounter , msg.sender , candidate);
+		
+		return true;
+	}
+
+	/**
+	 * @dev removes governance contract address to list of candidates
+	 *
+	 * @param candidate address of the deployed contract that sender is cancelling
+	 *
+	 */
+	function cancel(address candidate) public returns (bool) {
+		// check if submission stage is running
+		require(stage() == 1);
+		
+		// get the original owner of candidate
+		var sender = candidateOwner[cycleCounter][candidate];
+
+		// check if owner has sent cancel request
+		if(sender == msg.sender) {
+			// remove candidate from list 
+			candidateCount[cycleCounter] --;
+			candidates[cycleCounter][candidateIndex[cycleCounter][candidate]] = candidates[cycleCounter][candidateCount[cycleCounter]];
+			candidateIndex[cycleCounter][candidates[cycleCounter][candidateCount[cycleCounter]]] = candidateIndex[cycleCounter][candidate];
+
+			// set candidate to invalid one
+			candidateOwner[cycleCounter][candidate] = address(0);
+
+			// emit the event 
+			CancelEvent(cycleCounter , msg.sender , candidate);
+		}
 		
 		return true;
 	}
@@ -169,6 +223,7 @@ contract Governance is Ownable, Timestamped {
 	 *
 	 */
 	 function submitSafe(address candidate) public returns (bool) {
+	 	cancel(candidate);
 	 	submit(candidate);
 
 	 	return true;
@@ -184,7 +239,7 @@ contract Governance is Ownable, Timestamped {
 		// check if voting stage is running
 		require(stage() == 2);
 		// check if candidate is valid one
-		require(candidateWeight[cycleCounter][candidate] > 0);
+		require(candidateOwner[cycleCounter][candidate] != address(0));
 		// check if user have not already voted
 		require(candidateVoters[cycleCounter][candidate][msg.sender] == 0);
 		// check if user have not already voted to someone else
@@ -203,6 +258,11 @@ contract Governance is Ownable, Timestamped {
 		// register voter for candidate
 		candidateVoters[cycleCounter][candidate][voter] = candidateVoters[cycleCounter][candidate][voter].add(balance);
 
+		// add voter to list 
+		voterIndex[cycleCounter][voter] = voterCount[cycleCounter];
+		voters[cycleCounter].length ++;
+		voters[cycleCounter][voterCount[cycleCounter] ++] = voter;
+
 		// register voter 
 		voterCandidate[cycleCounter][voter] = candidate;
 
@@ -220,7 +280,53 @@ contract Governance is Ownable, Timestamped {
 		return true;
 	}
 
-	
+	/**
+	 * @dev remove vote to governance contract address if applied
+	 *
+	 */
+	function decline() public returns (bool) {
+		// check if voting stage is running
+		require(stage() == 2);
+		
+		// set voter variable 
+		address voter = msg.sender;
+
+		// get the candidate voter has voted for
+		address candidate = voterCandidate[cycleCounter][voter];	
+
+		// check if candidate has really voted
+		if(candidate != address(0)) {
+			// get voted balance 
+			uint256 balance = candidateVoters[cycleCounter][candidate][voter];
+
+			// cancel weight to candidate
+			candidateWeight[cycleCounter][candidate] = candidateWeight[cycleCounter][candidate].sub(balance);
+
+			// cancel voter for candidate
+			candidateVoters[cycleCounter][candidate][voter] = candidateVoters[cycleCounter][candidate][voter].sub(balance);
+
+			// remove voter from list 
+			voterCount[cycleCounter] --;
+			voters[cycleCounter][voterIndex[cycleCounter][voter]] = voters[cycleCounter][voterCount[cycleCounter]];
+			voterIndex[cycleCounter][voters[cycleCounter][voterCount[cycleCounter]]] = voterIndex[cycleCounter][voter];
+
+			// unregister voter 
+			voterCandidate[cycleCounter][voter] = address(0);
+
+			// emit the event 
+			DeclineEvent(cycleCounter , msg.sender , candidate , balance);
+
+			// NOTE: Vote is being taken off 
+			// So if the vote is being taken off from finalist then re-eveluate finalist
+			// Else finalist is not changing anyways
+			if(finalist[cycleCounter] == candidate) {
+				finalize();
+			}
+		}
+
+		return true;
+	}
+
 	/**
 	 * @dev removes existing vote and adds new vote to governance contract
 	 *
@@ -228,6 +334,7 @@ contract Governance is Ownable, Timestamped {
 	 *
 	 */
 	 function chooseSafe(address candidate) public returns (bool) {
+	 	decline();
 	 	choose(candidate);
 
 	 	return true;
@@ -255,6 +362,11 @@ contract Governance is Ownable, Timestamped {
 
 		// register supporter for finalist
 		finalistSupporters[cycleCounter][supporter] = finalistSupporters[cycleCounter][supporter].add(balance);
+
+		// add supporter to list 
+		supporterIndex[cycleCounter][supporter] = supporterCount[cycleCounter];
+		supporters[cycleCounter].length ++;
+		supporters[cycleCounter][supporterCount[cycleCounter] ++] = supporter;
 
 		// emit the event 
 		DecideEvent(cycleCounter , msg.sender , finalist[cycleCounter] , balance);
@@ -284,6 +396,11 @@ contract Governance is Ownable, Timestamped {
 			// register supporter for finalist
 			finalistSupporters[cycleCounter][supporter] = finalistSupporters[cycleCounter][supporter].sub(balance);
 
+			// remove supporter from list 
+			supporterCount[cycleCounter] --;
+			supporters[cycleCounter][supporterIndex[cycleCounter][supporter]] = supporters[cycleCounter][supporterCount[cycleCounter]];
+			supporterIndex[cycleCounter][supporters[cycleCounter][supporterCount[cycleCounter]]] = supporterIndex[cycleCounter][supporter];
+
 			// emit the event 
 			DitherEvent(cycleCounter , msg.sender , finalist[cycleCounter] , balance);
 		}
@@ -303,6 +420,27 @@ contract Governance is Ownable, Timestamped {
 	}
 
 	/**
+	 * @dev iterates over the candidates and decides the finalist
+	 *
+	 */
+	function finalize() public returns (bool) {
+		// check if choose or decide stage is running 
+		require(stage() == 2 || stage() == 3);
+
+		// get current finalist values
+		finalistWeight[cycleCounter] = candidateWeight[cycleCounter][finalist[cycleCounter]];
+
+		for(uint256 i = 0 ; i < candidateCount[cycleCounter] ; i ++) {
+			if(finalistWeight[cycleCounter] < candidateWeight[cycleCounter][candidates[cycleCounter][i]]) {
+				finalist[cycleCounter] = candidates[cycleCounter][i];
+				finalistWeight[cycleCounter] = candidateWeight[cycleCounter][candidates[cycleCounter][i]];
+			}				
+		}
+
+		return true;
+	}
+
+	/**
 	 * @dev transfer function is called from token contract 
 	 * whenver tokens are transferred between two accounts
 	 *
@@ -310,11 +448,59 @@ contract Governance is Ownable, Timestamped {
 	 * @param to address The address which you want to transfer to
 	 * @param value uint256 the amount of tokens to be transferred
 	 */
-	function transfer(address from , address to , uint256 value) public onlyRelay {
+	function transfer(address from , address to , uint256 value) public returns (bool) {
+		uint256 fromBalance = 0;
+		uint256 toBalance = 0;
+
+		// check if it is submit stage		
+		if(stage() == 1) {
+			// do nothing.. it doesn't matter if tokens are moved 
+		} 
+		// check if it is choose stage 
+		else if(stage() == 2) {			
+			// check if sender has already voted and change the weight of vote
+			address fromCandidate = voterCandidate[cycleCounter][from];	
+			if(fromCandidate != address(0)) {
+				// get voted balance and reduce the weight of vote
+				fromBalance = candidateVoters[cycleCounter][fromCandidate][from];
+				candidateWeight[cycleCounter][fromCandidate] = candidateWeight[cycleCounter][fromCandidate].sub(value);
+				candidateVoters[cycleCounter][fromCandidate][from] = candidateVoters[cycleCounter][fromCandidate][from].sub(value);
+
+				// emit the event 
+				ChooseChangeEvent(cycleCounter , from , fromCandidate , fromBalance , fromBalance.sub(value));
+
+				// NOTE: Vote is being taken off 
+				// So if the vote is being taken off from finalist then re-eveluate finalist
+				// Else finalist is not changing anyways
+				if(finalist[cycleCounter] == fromCandidate) {
+					finalize();
+				}
+			}
+
+			// check if receiver has already voted and change the weight of vote
+			address toCandidate = voterCandidate[cycleCounter][to];	
+			if(toCandidate != address(0)) {
+				// get voted balance and increase the weight of vote
+				toBalance = candidateVoters[cycleCounter][toCandidate][to];
+				candidateWeight[cycleCounter][toCandidate] = candidateWeight[cycleCounter][toCandidate].add(value);
+				candidateVoters[cycleCounter][toCandidate][to] = candidateVoters[cycleCounter][toCandidate][to].add(value);
+
+				// emit the event 
+				ChooseChangeEvent(cycleCounter , to , toCandidate , toBalance , toBalance.add(value));
+
+				// NOTE: Vote is being added to candidate
+				// No need to call finalize method from this method because 
+				// weight is getting increased so should always check for higher condition
+				if(finalistWeight[cycleCounter] < candidateWeight[cycleCounter][toCandidate]) {
+					finalist[cycleCounter] = toCandidate;
+					finalistWeight[cycleCounter] = candidateWeight[cycleCounter][toCandidate];
+				}
+			}
+		}
 		// check if it is decide stage 
-		if(stage() == 3) {
+		else if(stage() == 3) {
 			// check if sender has already supported and change the weight of vote
-			uint256 fromBalance = finalistSupporters[cycleCounter][from];	
+			fromBalance = finalistSupporters[cycleCounter][from];	
 			if(fromBalance > 0) {
 				// reduce the weight of support
 				finalistSupport[cycleCounter] = finalistSupport[cycleCounter].sub(value);
@@ -322,7 +508,18 @@ contract Governance is Ownable, Timestamped {
 
 				// emit the event 
 				DecideChangeEvent(cycleCounter , from , finalist[cycleCounter] , fromBalance , fromBalance.sub(value));
-			}			
+			}
+
+			// check if receiver has already supported and change the weight of vote
+			toBalance = finalistSupporters[cycleCounter][to];	
+			if(toBalance > 0) {
+				// reduce the weight of support
+				finalistSupport[cycleCounter] = finalistSupport[cycleCounter].add(value);
+				finalistSupporters[cycleCounter][to] = finalistSupporters[cycleCounter][to].add(value);
+
+				// emit the event 
+				DecideChangeEvent(cycleCounter , to , finalist[cycleCounter] , toBalance , toBalance.add(value));
+			}
 		}
 	}
 
@@ -331,25 +528,14 @@ contract Governance is Ownable, Timestamped {
 	 * whenver tokens are transferred between two accounts
 	 *
 	 * @param from address The address which you want to send tokens from
-	 * @param to address The address which you want to receive tokens to
 	 */
-	function transferLocked(address from, address to) public view returns (bool) {
+	function transferLocked(address from) public view returns (bool) {
 		// check if choose stage is running
 		if(stage() == 2) {			
-			if(from != address(0)) {	
-				// check if sender has already voted and change the weight of vote
-				address fromCandidate = voterCandidate[cycleCounter][from];	
-				if(fromCandidate != address(0)) {
-					return true;
-				}
-			}
-
-			if(to != address(0)) {
-				// check if receiver has already voted and change the weight of vote
-				address toCandidate = voterCandidate[cycleCounter][to];	
-				if(toCandidate != address(0)) {
-					return true;
-				}
+			// check if sender has already voted and change the weight of vote
+			address fromCandidate = voterCandidate[cycleCounter][from];	
+			if(fromCandidate != address(0)) {
+				return true;
 			}
 		}
 		return false;
@@ -376,25 +562,32 @@ contract Governance is Ownable, Timestamped {
 		// check if close stage is reached 
 		require(stage() == 0);
 		// check if finalist is selected
-		require(closed[cycleCounter] == false);
+		require(finalist[cycleCounter] != address(0));
 
 		// check if quorum reached
 		if(isQuorumReached(cycleCounter)) {
 			if (cycle() == 0) {
 				// switch governance contract
-				relay.setGovernance(finalist[cycleCounter]);
+				governanceRelay.setGovernance(finalist[cycleCounter]);
 			}
 			else {
 				// switch decision module contract
-				relay.setDecisionModule(finalist[cycleCounter]);
+				governanceRelay.setDecisionModule(finalist[cycleCounter]);
 			}			
 		}
 
-		// update the closed values
-		closed[cycleCounter] = true;
+		// update the decided values
+		decided[cycleCounter] = finalist[cycleCounter];
+		decidedWeight[cycleCounter] = finalistWeight[cycleCounter];
+		decidedSupport[cycleCounter] = finalistSupport[cycleCounter];
 		
+		// finalist[cycleCounter] = address(0);
+		// finalistWeight[cycleCounter] = 0;
+		// finalistSupport[cycleCounter] = 0;
+
 		// increment cycle counter
 		cycleCounter = cycleCounter + 1;
+
 
 		return true;
 	}	
