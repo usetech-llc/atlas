@@ -549,24 +549,25 @@ contract('IncentivePool', function (accounts) {
                 var zeroAmount = 0;
                 var amount = tokenMultiplier.mul(10000000);
 
-                // Get curve value for 30 days
-                var seconds = 30 * 24 * 60 * 60;
-                var curveValBefore = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds)));
-                // FIXME : 10 seconds insufficient when run all tests together
-                var curveValAfter = web3.toBigNumber(await sut.getCurveValueTestable(genesis.add(seconds + 10)));
-                var tolerance = curveValAfter.minus(curveValBefore);
-
                 // Call ACX Allocate with 0 amount to trigger mint
-                await sut.allocateACX(zeroAmount, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
-
+                var time1 = await timeHelper.executeAndGetTimestamp(async() => {
+                    return await sut.allocateACX(zeroAmount, recipient1, {from: decisionModuleAddr});
+                });
                 // Call ACX Allocate and measure decrease in balance
                 var ACX_balanceBefore = web3.toBigNumber(await sut.ACX_balance());
-                await sut.allocateACX(amount, recipient1, {from: decisionModuleAddr}).should.be.fulfilled;
+                
+                var time2 = await timeHelper.executeAndGetTimestamp(async() => {
+                    return await sut.allocateACX(amount, recipient1, {from: decisionModuleAddr});
+                });
                 var ACX_balanceAfter = web3.toBigNumber(await sut.ACX_balance());
-
-                // Time may have updated by a few seconds, so this equality is only approximate
-                ACX_balanceBefore.sub(amount).should.be.bignumber.at.least(ACX_balanceAfter);
-                ACX_balanceBefore.sub(amount).should.be.bignumber.at.most(ACX_balanceAfter.add(tolerance));
+                
+                // Get curve value diff
+                var curveValBefore = web3.toBigNumber(await sut.getCurveValueTestable(time1));
+                var curveValAfter = web3.toBigNumber(await sut.getCurveValueTestable(time2));
+                var tolerance = curveValAfter.minus(curveValBefore);
+    
+                // before - amount == after - tolerance
+                ACX_balanceBefore.sub(amount).should.be.bignumber.equal(ACX_balanceAfter.sub(tolerance));
             });
 
             it('Should mint tokens according to ACX_minted', async () => {
@@ -1005,7 +1006,6 @@ contract('IncentivePool', function (accounts) {
         it('Last update is in deterministic period, now is dynamic period, inflation = 0.5%', async () => {
             // Move time to 1 year after genesis
             await timeHelper.setTestRPCTime(genesis.add(365.25 * 24 * 3600));
-
             // mint and measure
             const mints1 = await getMintValues();
 
@@ -1013,10 +1013,10 @@ contract('IncentivePool', function (accounts) {
             const totalSupply = web3.toBigNumber(await token.totalSupply());
             const inflation = new BigNumber(0.005);
             await sut.setInflationRate(totalSupply.mul(inflation), genesis.add(10 * 365.25 * 24 * 3600));
-
+    
             // Move time to 11 years after genesis
             await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
-
+            
             // mint and measure
             const mints2 = await getMintValues();
 
@@ -1025,7 +1025,6 @@ contract('IncentivePool', function (accounts) {
             const expectedMintedValue2 = mints2.curveVal.add(totalSupply.mul(inflation).mul(timePeriod).div(secondsInOneYear));
 
             // Because of rounding, the equality should be approximate (no fractions, token is integer)
-            // FIXME : when run all tests together diff can be larger then expected => rounding insufficient
             const approxActualDiff = mints2.minted.sub(mints1.minted).div(10).floor(0);
             const approxExpectDiff = expectedMintedValue2.sub(expectedMintedValue1).div(10).floor(0);
             approxActualDiff.should.be.bignumber.equal(approxExpectDiff);
