@@ -5,8 +5,9 @@ import "zeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./AccessToken.sol";
 import "./Governance.sol";
 import "./DecisionModule.sol";
+import "./CommonParams.sol";
 
-contract Relay {
+contract Relay is CommonParams {
 	using SafeMath for uint256;
 
 	// current token contract address
@@ -39,9 +40,15 @@ contract Relay {
 
 		governanceAddress = _governanceAddress;
 		governance = Governance(governanceAddress);
+		if(governance.interfaceID() != g_interfaceID){
+			revert();
+		}
 
 		decisionModuleAddress = _decisionModuleAddress;
 		decisionModule = DecisionModule(decisionModuleAddress);
+		if(decisionModule.interfaceID() != dm_interfaceID){
+			revert();
+		}
 	}
 
 	/**
@@ -73,6 +80,9 @@ contract Relay {
 		governanceAddress = _governanceAddress;
 		governance = Governance(governanceAddress);
 		GovernanceChanged(_governanceAddress);
+		if(governance.interfaceID() != g_interfaceID){
+			revert();
+		}
 	}
 
 	/**
@@ -84,6 +94,9 @@ contract Relay {
 		decisionModuleAddress = _decisionModuleAddress;
 		decisionModule = DecisionModule(decisionModuleAddress);
 		DecisionModuleChanged(_decisionModuleAddress);
+		if(decisionModule.interfaceID() != dm_interfaceID){
+			revert();
+		}
 	}
 
     /**

@@ -5,8 +5,9 @@ import "zeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./Timestamped.sol";
 import "./AccessToken.sol";
 import "./Relay.sol";
+import "./GovernanceAbstractBase.sol";
 
-contract Governance is Ownable, Timestamped {
+contract Governance is Ownable, Timestamped, GovernanceAbstractBase {
 	using SafeMath for uint256;
 
 	// token contract address 
@@ -397,5 +398,9 @@ contract Governance is Ownable, Timestamped {
 		cycleCounter = cycleCounter + 1;
 
 		return true;
-	}	
+	}
+
+	function version() public returns (string) {
+		return "1.0";
+	}
 }

@@ -5,8 +5,9 @@ import "zeppelin-solidity/contracts/ownership/Ownable.sol";
 import "./Timestamped.sol";
 import "./AccessToken.sol";
 import "./Relay.sol";
+import "./DecisionModuleAbstractBase.sol";
 
-contract DecisionModule is Ownable, Timestamped {
+contract DecisionModule is Ownable, Timestamped, DecisionModuleAbstractBase {
 	using SafeMath for uint256;
 
 	// token contract address 
@@ -68,5 +69,9 @@ contract DecisionModule is Ownable, Timestamped {
 	 */
 	function transferLocked(address from, address to) public view returns (bool) {
 		return false;
+	}
+
+	function version() public returns (string) {
+		return "1.0";
 	}
 }

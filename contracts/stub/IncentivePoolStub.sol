@@ -1,5 +1,5 @@
 pragma solidity ^0.4.18;
-import './IncentivePool.sol';
+import '../IncentivePool.sol';
 
 contract IncentivePoolStub is IncentivePool {
 
