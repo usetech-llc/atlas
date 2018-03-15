@@ -331,7 +331,7 @@ contract('IncentivePool', function (accounts) {
             });
         })
 
-        describe.only('ACX deterministic curve - hyperbolic', async() => {
+        describe('ACX deterministic curve - hyperbolic', async() => {
             it('Equals 0 at genesis time', async () => {
                 var curveVal = web3.toBigNumber(await sut.getCurveValueTestable(genesis));
                 curveVal.should.be.bignumber.equal(0);
@@ -481,17 +481,17 @@ contract('IncentivePool', function (accounts) {
                 });
                 // Call ACX Allocate and measure decrease in balance
                 var ACX_balanceBefore = web3.toBigNumber(await sut.ACX_balance());
-                
+
                 var time2 = await timeHelper.executeAndGetTimestamp(async() => {
                     return await sut.allocateACX(amount, recipient1, {from: decisionModuleAddr});
                 });
                 var ACX_balanceAfter = web3.toBigNumber(await sut.ACX_balance());
-                
+
                 // Get curve value diff
                 var curveValBefore = web3.toBigNumber(await sut.getCurveValueTestable(time1));
                 var curveValAfter = web3.toBigNumber(await sut.getCurveValueTestable(time2));
                 var tolerance = curveValAfter.minus(curveValBefore);
-    
+
                 // before - amount == after - tolerance
                 ACX_balanceBefore.sub(amount).should.be.bignumber.equal(ACX_balanceAfter.sub(tolerance));
             });
@@ -939,10 +939,10 @@ contract('IncentivePool', function (accounts) {
             const totalSupply = web3.toBigNumber(await token.totalSupply());
             const inflation = new BigNumber(0.005);
             await sut.setInflationRate(totalSupply.mul(inflation), genesis.add(10 * 365.25 * 24 * 3600));
-    
+
             // Move time to 11 years after genesis
             await timeHelper.setTestRPCTime(genesis.add(11 * 365.25 * 24 * 3600));
-            
+
             // mint and measure
             const mints2 = await getMintValues();
 
